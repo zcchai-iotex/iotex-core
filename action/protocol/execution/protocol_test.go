@@ -967,9 +967,9 @@ func TestERC20(t *testing.T) {
 }
 func TestSimpleSum(t *testing.T) {
 	sct := &smartContractTest{
-		prepare: map[string]*big.Int{testaddress.Addrinfo["alfa"].Bech32(): big.NewInt(9876543210)},
+		prepare: map[string]*big.Int{testaddress.Addrinfo["alfa"].String(): big.NewInt(9876543210)},
 		deploy: execCfg{
-			executor:            testaddress.Addrinfo["alfa"].Bech32(),
+			executor:            testaddress.Addrinfo["alfa"].String(),
 			privateKey:          testaddress.Keyinfo["alfa"].PriKey,
 			codeHex:             "608060405234801561001057600080fd5b5060c58061001f6000396000f300608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063cad0899b146044575b600080fd5b348015604f57600080fd5b5060766004803603810190808035906020019092919080359060200190929190505050608c565b6040518082815260200191505060405180910390f35b60008183019050929150505600a165627a7a72305820b6506f4075e1d6b6a02a720b45c6cb465437e8ad240dc65eb6377a92889e6e020029",
 			amount:              0,
@@ -983,7 +983,7 @@ func TestSimpleSum(t *testing.T) {
 			func() execCfg {
 				retval, _ := hex.DecodeString("000000000000000000000000000000000000000000000000000000000001046a")
 				return execCfg{
-					executor:            testaddress.Addrinfo["alfa"].Bech32(),
+					executor:            testaddress.Addrinfo["alfa"].String(),
 					privateKey:          testaddress.Keyinfo["alfa"].PriKey,
 					codeHex:             "cad0899b0000000000000000000000000000000000000000000000000000000000003039000000000000000000000000000000000000000000000000000000000000d431",
 					amount:              0,
@@ -1000,9 +1000,9 @@ func TestSimpleSum(t *testing.T) {
 }
 func TestDouble(t *testing.T) {
 	sct := &smartContractTest{
-		prepare: map[string]*big.Int{testaddress.Addrinfo["alfa"].Bech32(): big.NewInt(9876543210)},
+		prepare: map[string]*big.Int{testaddress.Addrinfo["alfa"].String(): big.NewInt(9876543210)},
 		deploy: execCfg{
-			executor:            testaddress.Addrinfo["alfa"].Bech32(),
+			executor:            testaddress.Addrinfo["alfa"].String(),
 			privateKey:          testaddress.Keyinfo["alfa"].PriKey,
 			codeHex:             "608060405234801561001057600080fd5b5060c28061001f6000396000f3fe6080604052600436106039576000357c010000000000000000000000000000000000000000000000000000000090048063eee9720614603e575b600080fd5b348015604957600080fd5b50607360048036036020811015605e57600080fd5b81019080803590602001909291905050506089565b6040518082815260200191505060405180910390f35b600081600202905091905056fea165627a7a7230582098239f36a0b72e5504c45d691ed8eb88c07b9e027149cbcb0b384474ffb0c96d0029",
 			amount:              0,
@@ -1016,7 +1016,7 @@ func TestDouble(t *testing.T) {
 			func() execCfg {
 				retval, _ := hex.DecodeString("0000000000000000000000000000000000000000000000000000000000000002")
 				return execCfg{
-					executor:            testaddress.Addrinfo["alfa"].Bech32(),
+					executor:            testaddress.Addrinfo["alfa"].String(),
 					privateKey:          testaddress.Keyinfo["alfa"].PriKey,
 					codeHex:             "eee972060000000000000000000000000000000000000000000000000000000000000001",
 					amount:              0,
