@@ -46,7 +46,6 @@ func TestAddSubChainActions(t *testing.T) {
 	startSubChain := action.NewStartSubChain(
 		1,
 		2,
-		testaddress.Addrinfo["producer"].String(),
 		MinSecurityDeposit,
 		big.NewInt(0).Mul(big.NewInt(1000000000), big.NewInt(blockchain.Iotx)),
 		110,
@@ -56,7 +55,7 @@ func TestAddSubChainActions(t *testing.T) {
 	)
 	bd := &action.EnvelopeBuilder{}
 	elp := bd.SetNonce(1).SetGasLimit(10000).SetAction(startSubChain).Build()
-	selp, err := action.Sign(elp, testaddress.Addrinfo["producer"].String(), testaddress.Keyinfo["producer"].PriKey)
+	selp, err := action.Sign(elp, testaddress.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 	require.NoError(t, ap.Add(selp))
 
@@ -64,7 +63,6 @@ func TestAddSubChainActions(t *testing.T) {
 	roots["10002"] = byteutil.BytesTo32B([]byte("10002"))
 	putBlock := action.NewPutBlock(
 		2,
-		testaddress.Addrinfo["alfa"].String(),
 		testaddress.Addrinfo["producer"].String(),
 		10001,
 		roots,
@@ -77,12 +75,11 @@ func TestAddSubChainActions(t *testing.T) {
 		SetDestinationAddress(testaddress.Addrinfo["alfa"].String()).
 		SetAction(putBlock).
 		SetGasLimit(10003).Build()
-	pbselp, err := action.Sign(pbelp, testaddress.Addrinfo["producer"].String(), testaddress.Keyinfo["producer"].PriKey)
+	pbselp, err := action.Sign(pbelp, testaddress.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 	require.NoError(t, ap.Add(pbselp))
 
 	stopSubChain := action.NewStopSubChain(
-		testaddress.Addrinfo["producer"].String(),
 		3,
 		testaddress.Addrinfo["alfa"].String(),
 		10003,
@@ -95,7 +92,7 @@ func TestAddSubChainActions(t *testing.T) {
 		SetDestinationAddress(testaddress.Addrinfo["alfa"].String()).
 		SetAction(stopSubChain).
 		SetGasLimit(10005).Build()
-	sscselp, err := action.Sign(sscelp, testaddress.Addrinfo["producer"].String(), testaddress.Keyinfo["producer"].PriKey)
+	sscselp, err := action.Sign(sscelp, testaddress.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 	require.NoError(t, ap.Add(sscselp))
 

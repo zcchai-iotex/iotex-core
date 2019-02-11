@@ -23,7 +23,7 @@ func TestExecutionSignVerify(t *testing.T) {
 	executorKey := testaddress.Keyinfo["producer"]
 	data, err := hex.DecodeString("")
 	require.NoError(err)
-	ex, err := NewExecution(executorAddr.String(), contractAddr.String(), 0, big.NewInt(10), uint64(10), big.NewInt(10), data)
+	ex, err := NewExecution(contractAddr.String(), 0, big.NewInt(10), uint64(10), big.NewInt(10), data)
 	require.NoError(err)
 
 	bd := &EnvelopeBuilder{}
@@ -37,7 +37,7 @@ func TestExecutionSignVerify(t *testing.T) {
 	require.Error(Verify(w))
 
 	// sign the Execution
-	selp, err := Sign(elp, executorAddr.String(), executorKey.PriKey)
+	selp, err := Sign(elp, executorKey.PriKey)
 	require.NoError(err)
 	require.NotNil(selp)
 

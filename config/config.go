@@ -94,6 +94,7 @@ var (
 			EnableTrielessStateDB:        true,
 			EnableIndex:                  false,
 			EnableAsyncIndexWrite:        false,
+			RecoveryHeight:               0,
 		},
 		ActPool: ActPool{
 			MaxNumActsPerPool: 32000,
@@ -140,6 +141,18 @@ var (
 			},
 			MaxTransferPayloadBytes: 1024,
 		},
+		API: API{
+			Enabled:   false,
+			UseRDS:    false,
+			Port:      14004,
+			TpsWindow: 10,
+			GasStation: GasStation{
+				SuggestBlockWindow: 20,
+				DefaultGas:         1,
+				Percentile:         60,
+			},
+			MaxTransferPayloadBytes: 1024,
+		},
 		Indexer: Indexer{
 			Enabled:           false,
 			NodeAddr:          "",
@@ -173,6 +186,7 @@ var (
 		ValidateRollDPoS,
 		ValidateDispatcher,
 		ValidateExplorer,
+		ValidateAPI,
 		ValidateActPool,
 		ValidateChain,
 	}
@@ -213,6 +227,8 @@ type (
 		EnableIndex bool `yaml:"enableIndex"`
 		// enable writing the block actions' and receipts' index asynchronously
 		EnableAsyncIndexWrite bool `yaml:"enableAsyncIndexWrite"`
+		// the height chain recover to
+		RecoveryHeight uint64 `yaml:"recoveryHeight"`
 	}
 
 	// Consensus is the config struct for consensus package
@@ -250,6 +266,18 @@ type (
 		Enabled    bool       `yaml:"enabled"`
 		IsTest     bool       `yaml:"isTest"`
 		UseIndexer bool       `yaml:"useIndexer"`
+		Port       int        `yaml:"port"`
+		TpsWindow  int        `yaml:"tpsWindow"`
+		GasStation GasStation `yaml:"gasStation"`
+		// MaxTransferPayloadBytes limits how many bytes a playload can contain at most
+		MaxTransferPayloadBytes uint64 `yaml:"maxTransferPayloadBytes"`
+	}
+
+	// API is the api service config
+	API struct {
+		Enabled    bool       `yaml:"enabled"`
+		IsTest     bool       `yaml:"isTest"`
+		UseRDS     bool       `yaml:"useRDS"`
 		Port       int        `yaml:"port"`
 		TpsWindow  int        `yaml:"tpsWindow"`
 		GasStation GasStation `yaml:"gasStation"`
@@ -344,6 +372,7 @@ type (
 		BlockSync  BlockSync        `yaml:"blockSync"`
 		Dispatcher Dispatcher       `yaml:"dispatcher"`
 		Explorer   Explorer         `yaml:"explorer"`
+		API        API              `yaml:"api"`
 		Indexer    Indexer          `yaml:"indexer"`
 		System     System           `yaml:"system"`
 		DB         DB               `yaml:"db"`
@@ -551,6 +580,14 @@ func ValidateRollDPoS(cfg Config) error {
 func ValidateExplorer(cfg Config) error {
 	if cfg.Explorer.Enabled && cfg.Explorer.TpsWindow <= 0 {
 		return errors.Wrap(ErrInvalidCfg, "tps window is not a positive integer when the explorer is enabled")
+	}
+	return nil
+}
+
+// ValidateAPI validates the api configs
+func ValidateAPI(cfg Config) error {
+	if cfg.API.Enabled && cfg.API.TpsWindow <= 0 {
+		return errors.Wrap(ErrInvalidCfg, "tps window is not a positive integer when the api is enabled")
 	}
 	return nil
 }

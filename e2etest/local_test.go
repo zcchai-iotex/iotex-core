@@ -165,7 +165,7 @@ func TestLocalCommit(t *testing.T) {
 	// transfer 1
 	// C --> A
 	s, _ = bc.StateByAddr(ta.Addrinfo["charlie"].String())
-	tsf1, err := testutil.SignedTransfer(ta.Addrinfo["charlie"].String(), ta.Addrinfo["alfa"].String(), ta.Keyinfo["charlie"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
+	tsf1, err := testutil.SignedTransfer(ta.Addrinfo["alfa"].String(), ta.Keyinfo["charlie"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
 	require.NoError(err)
 
 	act1 := tsf1.Proto()
@@ -193,11 +193,11 @@ func TestLocalCommit(t *testing.T) {
 	// transfer 2
 	// F --> D
 	s, _ = bc.StateByAddr(ta.Addrinfo["foxtrot"].String())
-	tsf2, err := testutil.SignedTransfer(ta.Addrinfo["foxtrot"].String(), ta.Addrinfo["delta"].String(), ta.Keyinfo["foxtrot"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
+	tsf2, err := testutil.SignedTransfer(ta.Addrinfo["delta"].String(), ta.Keyinfo["foxtrot"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
 	require.NoError(err)
 
 	actionMap = make(map[string][]action.SealedEnvelope)
-	actionMap[tsf2.SrcAddr()] = []action.SealedEnvelope{tsf2}
+	actionMap[ta.Addrinfo["foxtrot"].String()] = []action.SealedEnvelope{tsf2}
 	blk2, err := chain.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -222,11 +222,11 @@ func TestLocalCommit(t *testing.T) {
 	// transfer 3
 	// B --> B
 	s, _ = bc.StateByAddr(ta.Addrinfo["bravo"].String())
-	tsf3, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Addrinfo["bravo"].String(), ta.Keyinfo["bravo"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
+	tsf3, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["bravo"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
 	require.NoError(err)
 
 	actionMap = make(map[string][]action.SealedEnvelope)
-	actionMap[tsf3.SrcAddr()] = []action.SealedEnvelope{tsf3}
+	actionMap[ta.Addrinfo["bravo"].String()] = []action.SealedEnvelope{tsf3}
 	blk3, err := chain.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -251,11 +251,11 @@ func TestLocalCommit(t *testing.T) {
 	// transfer 4
 	// test --> E
 	s, _ = bc.StateByAddr(ta.Addrinfo["producer"].String())
-	tsf4, err := testutil.SignedTransfer(ta.Addrinfo["producer"].String(), ta.Addrinfo["echo"].String(), ta.Keyinfo["producer"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
+	tsf4, err := testutil.SignedTransfer(ta.Addrinfo["echo"].String(), ta.Keyinfo["producer"].PriKey, s.Nonce+1, big.NewInt(1), []byte{}, 100000, big.NewInt(0))
 	require.NoError(err)
 
 	actionMap = make(map[string][]action.SealedEnvelope)
-	actionMap[tsf4.SrcAddr()] = []action.SealedEnvelope{tsf4}
+	actionMap[ta.Addrinfo["producer"].String()] = []action.SealedEnvelope{tsf4}
 	blk4, err := chain.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -538,25 +538,25 @@ func TestVoteLocalCommit(t *testing.T) {
 
 	// Add block 1
 	// Alfa, Bravo and Charlie selfnomination
-	tsf1, err := testutil.SignedTransfer(ta.Addrinfo["producer"].String(), ta.Addrinfo["alfa"].String(), ta.Keyinfo["producer"].PriKey, 7, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf1, err := testutil.SignedTransfer(ta.Addrinfo["alfa"].String(), ta.Keyinfo["producer"].PriKey, 7, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	tsf2, err := testutil.SignedTransfer(ta.Addrinfo["producer"].String(), ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 8, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf2, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 8, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	tsf3, err := testutil.SignedTransfer(ta.Addrinfo["producer"].String(), ta.Addrinfo["charlie"].String(), ta.Keyinfo["producer"].PriKey, 9, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf3, err := testutil.SignedTransfer(ta.Addrinfo["charlie"].String(), ta.Keyinfo["producer"].PriKey, 9, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	tsf4, err := testutil.SignedTransfer(ta.Addrinfo["producer"].String(), ta.Addrinfo["delta"].String(), ta.Keyinfo["producer"].PriKey, 10, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf4, err := testutil.SignedTransfer(ta.Addrinfo["delta"].String(), ta.Keyinfo["producer"].PriKey, 10, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	vote1, err := testutil.SignedVote(ta.Addrinfo["alfa"].String(), ta.Addrinfo["alfa"].String(), ta.Keyinfo["alfa"].PriKey, 1, 100000, big.NewInt(0))
+	vote1, err := testutil.SignedVote(ta.Addrinfo["alfa"].String(), ta.Keyinfo["alfa"].PriKey, 1, 100000, big.NewInt(0))
 	require.NoError(err)
 
-	vote2, err := testutil.SignedVote(ta.Addrinfo["bravo"].String(), ta.Addrinfo["bravo"].String(), ta.Keyinfo["bravo"].PriKey, 1, 100000, big.NewInt(0))
+	vote2, err := testutil.SignedVote(ta.Addrinfo["bravo"].String(), ta.Keyinfo["bravo"].PriKey, 1, 100000, big.NewInt(0))
 	require.NoError(err)
 
-	vote3, err := testutil.SignedVote(ta.Addrinfo["charlie"].String(), ta.Addrinfo["charlie"].String(), ta.Keyinfo["charlie"].PriKey, 6, 100000, big.NewInt(0))
+	vote3, err := testutil.SignedVote(ta.Addrinfo["charlie"].String(), ta.Keyinfo["charlie"].PriKey, 6, 100000, big.NewInt(0))
 	require.NoError(err)
 
 	act1 := vote1.Proto()
@@ -617,14 +617,14 @@ func TestVoteLocalCommit(t *testing.T) {
 
 	// Add block 2
 	// Vote A -> B, C -> A
-	vote4, err := testutil.SignedVote(ta.Addrinfo["alfa"].String(), ta.Addrinfo["bravo"].String(), ta.Keyinfo["alfa"].PriKey, uint64(2), uint64(100000), big.NewInt(0))
+	vote4, err := testutil.SignedVote(ta.Addrinfo["bravo"].String(), ta.Keyinfo["alfa"].PriKey, uint64(2), uint64(100000), big.NewInt(0))
 	require.Nil(err)
-	vote5, err := testutil.SignedVote(ta.Addrinfo["charlie"].String(), ta.Addrinfo["alfa"].String(), ta.Keyinfo["charlie"].PriKey, uint64(7), uint64(100000), big.NewInt(0))
+	vote5, err := testutil.SignedVote(ta.Addrinfo["alfa"].String(), ta.Keyinfo["charlie"].PriKey, uint64(7), uint64(100000), big.NewInt(0))
 	require.Nil(err)
 
 	actionMap = make(map[string][]action.SealedEnvelope)
-	actionMap[vote4.SrcAddr()] = []action.SealedEnvelope{vote4}
-	actionMap[vote5.SrcAddr()] = []action.SealedEnvelope{vote5}
+	actionMap[ta.Addrinfo["alfa"].String()] = []action.SealedEnvelope{vote4}
+	actionMap[ta.Addrinfo["charlie"].String()] = []action.SealedEnvelope{vote5}
 	blk2, err := chain.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -673,11 +673,11 @@ func TestVoteLocalCommit(t *testing.T) {
 
 	// Add block 3
 	// D self nomination
-	vote6, err := testutil.SignedVote(ta.Addrinfo["delta"].String(), ta.Addrinfo["delta"].String(), ta.Keyinfo["delta"].PriKey, 5, 100000, big.NewInt(0))
+	vote6, err := testutil.SignedVote(ta.Addrinfo["delta"].String(), ta.Keyinfo["delta"].PriKey, 5, 100000, big.NewInt(0))
 	require.NoError(err)
 
 	actionMap = make(map[string][]action.SealedEnvelope)
-	actionMap[vote6.SrcAddr()] = []action.SealedEnvelope{vote6}
+	actionMap[ta.Addrinfo["delta"].String()] = []action.SealedEnvelope{vote6}
 	blk3, err := chain.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -724,15 +724,15 @@ func TestVoteLocalCommit(t *testing.T) {
 
 	// Add block 4
 	// Unvote B
-	vote7, err := action.NewVote(uint64(2), ta.Addrinfo["bravo"].String(), "", uint64(100000), big.NewInt(0))
+	vote7, err := action.NewVote(uint64(2), "", uint64(100000), big.NewInt(0))
 	require.NoError(err)
 	bd := &action.EnvelopeBuilder{}
 	elp := bd.SetAction(vote7).SetNonce(2).SetDestinationAddress("").SetGasLimit(100000).SetGasPrice(big.NewInt(0)).Build()
-	selp, err := action.Sign(elp, ta.Addrinfo["bravo"].String(), ta.Keyinfo["bravo"].PriKey)
+	selp, err := action.Sign(elp, ta.Keyinfo["bravo"].PriKey)
 	require.NoError(err)
 
 	actionMap = make(map[string][]action.SealedEnvelope)
-	actionMap[selp.SrcAddr()] = []action.SealedEnvelope{selp}
+	actionMap[ta.Addrinfo["bravo"].String()] = []action.SealedEnvelope{selp}
 	blk4, err := chain.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,

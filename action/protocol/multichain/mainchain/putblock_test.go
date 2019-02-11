@@ -41,7 +41,6 @@ func TestHandlePutBlock(t *testing.T) {
 	chain.EXPECT().GetFactory().Return(sf).AnyTimes()
 
 	addr := testaddress.Addrinfo["producer"]
-	addr2 := testaddress.Addrinfo["echo"]
 	key2 := testaddress.Keyinfo["echo"]
 
 	ws, err := sf.NewWorkingSet()
@@ -56,6 +55,7 @@ func TestHandlePutBlock(t *testing.T) {
 	ctx = protocol.WithRunActionsCtx(ctx,
 		protocol.RunActionsCtx{
 			Producer:        testaddress.Addrinfo["producer"],
+			Caller:          testaddress.Addrinfo["producer"],
 			GasLimit:        &gasLimit,
 			EnableGasCharge: testutil.EnableGasCharge,
 		})
@@ -77,7 +77,6 @@ func TestHandlePutBlock(t *testing.T) {
 	roots["10002"] = byteutil.BytesTo32B([]byte("10002"))
 	pb := action.NewPutBlock(
 		1,
-		addr2.String(),
 		addr.String(),
 		10001,
 		roots,
@@ -90,7 +89,7 @@ func TestHandlePutBlock(t *testing.T) {
 		SetDestinationAddress(addr.String()).
 		SetGasLimit(10003).
 		SetAction(pb).Build()
-	selp, err := action.Sign(elp, addr2.String(), key2.PriKey)
+	selp, err := action.Sign(elp, key2.PriKey)
 	require.NoError(t, err)
 
 	// first put
@@ -114,7 +113,6 @@ func TestHandlePutBlock(t *testing.T) {
 	roots["10002"] = byteutil.BytesTo32B([]byte("10003"))
 	pb2 := action.NewPutBlock(
 		1,
-		addr2.String(),
 		addr.String(),
 		10002,
 		roots,
@@ -126,7 +124,7 @@ func TestHandlePutBlock(t *testing.T) {
 		SetDestinationAddress(addr.String()).
 		SetGasLimit(10003).
 		SetAction(pb2).Build()
-	selp, err = action.Sign(elp, addr2.String(), key2.PriKey)
+	selp, err = action.Sign(elp, key2.PriKey)
 	require.NoError(t, err)
 
 	_, err = p.Handle(ctx, elp.Action(), ws)

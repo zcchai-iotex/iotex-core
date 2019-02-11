@@ -1,30 +1,29 @@
-// Copyright (c) 2018 IoTeX
+// Copyright (c) 2019 IoTeX
 // This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
 // warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
 // permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
 // License 2.0 that can be found in the LICENSE file.
 
-package explorer
+package api
 
 import (
 	"math/big"
 	"sort"
 
-	"github.com/iotexproject/iotex-core/address"
-	"github.com/iotexproject/iotex-core/pkg/keypair"
-
-	"github.com/pkg/errors"
+	"github.com/golang/protobuf/jsonpb"
 
 	"github.com/iotexproject/iotex-core/action"
+	"github.com/iotexproject/iotex-core/address"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/config"
-	"github.com/iotexproject/iotex-core/explorer/idl/explorer"
+	"github.com/iotexproject/iotex-core/pkg/keypair"
+	"github.com/iotexproject/iotex-core/proto"
 )
 
 // GasStation provide gas related api
 type GasStation struct {
 	bc  blockchain.Blockchain
-	cfg config.Explorer
+	cfg config.API
 }
 
 // SuggestGasPrice suggest gas price
@@ -68,57 +67,33 @@ func (gs *GasStation) suggestGasPrice() (int64, error) {
 }
 
 // EstimateGasForTransfer estimate gas for transfer
-func (gs *GasStation) estimateGasForTransfer(tsfJSON explorer.SendTransferRequest) (int64, error) {
-	actPb, err := convertExplorerTransferToActionPb(&tsfJSON, gs.cfg.MaxTransferPayloadBytes)
-	if err != nil {
+func (gs *GasStation) estimateGasForAction(request string) (int64, error) {
+	var actPb iproto.ActionPb
+	if err := jsonpb.UnmarshalString(request, &actPb); err != nil {
 		return 0, err
 	}
-	tsf := &action.SealedEnvelope{}
-	if err = tsf.LoadProto(actPb); err != nil {
+	var selp action.SealedEnvelope
+	if err := selp.LoadProto(&actPb); err != nil {
 		return 0, err
 	}
-	gas, err := tsf.IntrinsicGas()
+	// Special handling for executions
+	if sc, ok := selp.Action().(*action.Execution); ok {
+		callerPKHash := keypair.HashPubKey(selp.SrcPubkey())
+		callerAddr, err := address.FromBytes(callerPKHash[:])
+		if err != nil {
+			return 0, err
+		}
+		receipt, err := gs.bc.ExecuteContractRead(callerAddr, sc)
+		if err != nil {
+			return 0, err
+		}
+		return int64(receipt.GasConsumed), nil
+	}
+	gas, err := selp.IntrinsicGas()
 	if err != nil {
 		return 0, err
 	}
 	return int64(gas), nil
-}
-
-// EstimateGasForVote suggest gas for vote
-func (gs *GasStation) estimateGasForVote() (int64, error) {
-	v := &action.Vote{}
-	gas, err := v.IntrinsicGas()
-	if err != nil {
-		return 0, err
-	}
-	return int64(gas), nil
-}
-
-// EstimateGasForSmartContract suggest gas for smart contract
-func (gs *GasStation) estimateGasForSmartContract(execution explorer.Execution) (int64, error) {
-	actPb, err := convertExplorerExecutionToActionPb(&execution)
-	if err != nil {
-		return 0, err
-	}
-	selp := &action.SealedEnvelope{}
-	if err := selp.LoadProto(actPb); err != nil {
-		return 0, err
-	}
-	sc, ok := selp.Action().(*action.Execution)
-	if !ok {
-		return 0, errors.New("not execution")
-	}
-
-	callerPKHash := keypair.HashPubKey(selp.SrcPubkey())
-	callerAddr, err := address.FromBytes(callerPKHash[:])
-	if err != nil {
-		return 0, err
-	}
-	receipt, err := gs.bc.ExecuteContractRead(callerAddr, sc)
-	if err != nil {
-		return 0, err
-	}
-	return int64(receipt.GasConsumed), nil
 }
 
 type bigIntArray []*big.Int

@@ -138,7 +138,7 @@ type Blockchain interface {
 	// For smart contract operations
 	// ExecuteContractRead runs a read-only smart contract operation, this is done off the network since it does not
 	// cause any state change
-	ExecuteContractRead(ex *action.Execution) (*action.Receipt, error)
+	ExecuteContractRead(caller address.Address, ex *action.Execution) (*action.Receipt, error)
 
 	// AddSubscriber make you listen to every single produced block
 	AddSubscriber(BlockCreationSubscriber) error
@@ -170,9 +170,6 @@ type Option func(*blockchain, config.Config) error
 
 // key specifies the type of recovery height key used by context
 type key string
-
-// RecoveryHeightKey indicates the recovery height key used by context
-const RecoveryHeightKey key = "recoveryHeight"
 
 // DefaultStateFactoryOption sets blockchain's sf from config
 func DefaultStateFactoryOption() Option {
@@ -326,8 +323,7 @@ func (bc *blockchain) Start(ctx context.Context) (err error) {
 	if bc.tipHash, err = bc.dao.getBlockHash(bc.tipHeight); err != nil {
 		return err
 	}
-	recoveryHeight, _ := ctx.Value(RecoveryHeightKey).(uint64)
-	return bc.startExistingBlockchain(recoveryHeight)
+	return bc.startExistingBlockchain(bc.config.Chain.RecoveryHeight)
 }
 
 // Stop stops the blockchain.
@@ -793,7 +789,7 @@ func (bc *blockchain) RemoveSubscriber(s BlockCreationSubscriber) error {
 
 // ExecuteContractRead runs a read-only smart contract operation, this is done off the network since it does not
 // cause any state change
-func (bc *blockchain) ExecuteContractRead(ex *action.Execution) (*action.Receipt, error) {
+func (bc *blockchain) ExecuteContractRead(caller address.Address, ex *action.Execution) (*action.Receipt, error) {
 	// use latest block as carrier to run the offline execution
 	// the block itself is not used
 	h := bc.TipHeight()
@@ -810,16 +806,20 @@ func (bc *blockchain) ExecuteContractRead(ex *action.Execution) (*action.Receipt
 		return nil, err
 	}
 	gasLimit := genesis.BlockGasLimit
+	raCtx := protocol.RunActionsCtx{
+		BlockHeight:     blk.Height(),
+		BlockHash:       blk.HashBlock(),
+		BlockTimeStamp:  blk.Timestamp(),
+		Producer:        producer,
+		Caller:          caller,
+		EnableGasCharge: bc.config.Chain.EnableGasCharge,
+	}
 	return evm.ExecuteContract(
-		blk.Height(),
-		blk.HashBlock(),
-		producer,
-		blk.Timestamp(),
+		raCtx,
 		ws,
 		ex,
 		bc,
 		&gasLimit,
-		bc.config.Chain.EnableGasCharge,
 	)
 }
 
@@ -1153,11 +1153,11 @@ func (bc *blockchain) emitToSubscribers(blk *block.Block) {
 func (bc *blockchain) now() int64 { return bc.clk.Now().Unix() }
 
 func (bc *blockchain) genesisProducer() (keypair.PublicKey, keypair.PrivateKey, string, error) {
-	pk, err := keypair.DecodePublicKey(genesisProducerPublicKey)
+	pk, err := keypair.DecodePublicKey(GenesisProducerPublicKey)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "failed to decode public key")
 	}
-	sk, err := keypair.DecodePrivateKey(genesisProducerPrivateKey)
+	sk, err := keypair.DecodePrivateKey(GenesisProducerPrivateKey)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "failed to decode private key")
 	}

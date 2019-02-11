@@ -117,7 +117,6 @@ func TestTwoChains(t *testing.T) {
 		uint64(details.Nonce)+1,
 		2,
 		big.NewInt(0).Mul(big.NewInt(1), big.NewInt(blockchain.Iotx)),
-		addr1.String(),
 		addr2.String(),
 		testutil.TestGasLimit,
 		big.NewInt(0),
@@ -127,14 +126,13 @@ func TestTwoChains(t *testing.T) {
 		SetNonce(uint64(details.Nonce) + 1).
 		SetDestinationAddress(addr2.String()).
 		SetGasLimit(testutil.TestGasLimit).Build()
-	selp, err := action.Sign(elp, addr1.String(), sk1)
+	selp, err := action.Sign(elp, sk1)
 	require.NoError(t, err)
 
 	createRes, err := mainChainClient.CreateDeposit(explorer.CreateDepositRequest{
 		Version:      int64(createDeposit.Version()),
 		Nonce:        int64(createDeposit.Nonce()),
 		ChainID:      int64(createDeposit.ChainID()),
-		Sender:       createDeposit.Sender(),
 		SenderPubKey: keypair.EncodePublicKey(createDeposit.SenderPublicKey()),
 		Recipient:    createDeposit.Recipient(),
 		Amount:       createDeposit.Amount().String(),
@@ -151,7 +149,7 @@ func TestTwoChains(t *testing.T) {
 
 	cd1, err := mainChainClient.GetCreateDeposit(createRes.Hash)
 	require.NoError(t, err)
-	cds, err := mainChainClient.GetCreateDepositsByAddress(createDeposit.Sender(), 0, 1)
+	cds, err := mainChainClient.GetCreateDepositsByAddress(addr1.String(), 0, 1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(cds))
 	assert.Equal(t, cd1, cds[0])
@@ -177,7 +175,6 @@ func TestTwoChains(t *testing.T) {
 		nonce,
 		big.NewInt(0).Mul(big.NewInt(1), big.NewInt(blockchain.Iotx)),
 		index,
-		addr1.String(),
 		addr2.String(),
 		testutil.TestGasLimit,
 		big.NewInt(0),
@@ -187,13 +184,12 @@ func TestTwoChains(t *testing.T) {
 		SetNonce(nonce).
 		SetDestinationAddress(addr2.String()).
 		SetGasLimit(testutil.TestGasLimit).Build()
-	selp, err = action.Sign(elp, addr1.String(), sk1)
+	selp, err = action.Sign(elp, sk1)
 	require.NoError(t, err)
 
 	settleRes, err := subChainClient.SettleDeposit(explorer.SettleDepositRequest{
 		Version:      int64(settleDeposit.Version()),
 		Nonce:        int64(settleDeposit.Nonce()),
-		Sender:       settleDeposit.Sender(),
 		SenderPubKey: keypair.EncodePublicKey(settleDeposit.SenderPublicKey()),
 		Recipient:    settleDeposit.Recipient(),
 		Amount:       settleDeposit.Amount().String(),

@@ -8,7 +8,6 @@ package blockchain
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"sync"
@@ -40,23 +39,26 @@ func addTestingTsfBlocks(bc Blockchain) error {
 	tsf0, _ := action.NewTransfer(
 		1,
 		big.NewInt(3000000000),
-		Gen.CreatorAddr(),
 		ta.Addrinfo["producer"].String(),
 		[]byte{}, uint64(100000),
 		big.NewInt(10),
 	)
-	pubk, _ := keypair.DecodePublicKey(Gen.CreatorPubKey)
-	sig, _ := hex.DecodeString("c05c3ff8c9820038c03881c97f544593619ca4d1617c7c6d695aaf828339da9616877649d70948094a05a86b171320d1aae9afa4432606be3b263f808e11816e00")
 	bd := &action.EnvelopeBuilder{}
 	elp := bd.SetAction(tsf0).
 		SetDestinationAddress(ta.Addrinfo["producer"].String()).
 		SetNonce(1).
 		SetGasLimit(100000).
 		SetGasPrice(big.NewInt(10)).Build()
-
-	selp := action.AssembleSealedEnvelope(elp, Gen.CreatorAddr(), pubk, sig)
+	genSK, err := keypair.DecodePrivateKey(GenesisProducerPrivateKey)
+	if err != nil {
+		return err
+	}
+	selp, err := action.Sign(elp, genSK)
+	if err != nil {
+		return err
+	}
 	actionMap := make(map[string][]action.SealedEnvelope)
-	actionMap[selp.SrcAddr()] = []action.SealedEnvelope{selp}
+	actionMap[Gen.CreatorAddr()] = []action.SealedEnvelope{selp}
 	blk, err := bc.MintNewBlock(
 		actionMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -88,32 +90,32 @@ func addTestingTsfBlocks(bc Blockchain) error {
 	addr6 := ta.Addrinfo["foxtrot"].String()
 	// Add block 1
 	// test --> A, B, C, D, E, F
-	tsf1, err := testutil.SignedTransfer(addr0, addr1, priKey0, 1, big.NewInt(20), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf1, err := testutil.SignedTransfer(addr1, priKey0, 1, big.NewInt(20), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf2, err := testutil.SignedTransfer(addr0, addr2, priKey0, 2, big.NewInt(30), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf2, err := testutil.SignedTransfer(addr2, priKey0, 2, big.NewInt(30), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf3, err := testutil.SignedTransfer(addr0, addr3, priKey0, 3, big.NewInt(50), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf3, err := testutil.SignedTransfer(addr3, priKey0, 3, big.NewInt(50), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf4, err := testutil.SignedTransfer(addr0, addr4, priKey0, 4, big.NewInt(70), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf4, err := testutil.SignedTransfer(addr4, priKey0, 4, big.NewInt(70), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf5, err := testutil.SignedTransfer(addr0, addr5, priKey0, 5, big.NewInt(110), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf5, err := testutil.SignedTransfer(addr5, priKey0, 5, big.NewInt(110), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf6, err := testutil.SignedTransfer(addr0, addr6, priKey0, 6, big.NewInt(50<<20), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf6, err := testutil.SignedTransfer(addr6, priKey0, 6, big.NewInt(50<<20), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
 	accMap := make(map[string][]action.SealedEnvelope)
-	accMap[tsf1.SrcAddr()] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4, tsf5, tsf6}
+	accMap[addr0] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4, tsf5, tsf6}
 
 	blk, err = bc.MintNewBlock(
 		accMap,
@@ -134,28 +136,28 @@ func addTestingTsfBlocks(bc Blockchain) error {
 
 	// Add block 2
 	// Charlie --> A, B, D, E, test
-	tsf1, err = testutil.SignedTransfer(addr3, addr1, priKey3, 1, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf1, err = testutil.SignedTransfer(addr1, priKey3, 1, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf2, err = testutil.SignedTransfer(addr3, addr2, priKey3, 2, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf2, err = testutil.SignedTransfer(addr2, priKey3, 2, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf3, err = testutil.SignedTransfer(addr3, addr4, priKey3, 3, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf3, err = testutil.SignedTransfer(addr4, priKey3, 3, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf4, err = testutil.SignedTransfer(addr3, addr5, priKey3, 4, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf4, err = testutil.SignedTransfer(addr5, priKey3, 4, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf5, err = testutil.SignedTransfer(addr3, addr0, priKey3, 5, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf5, err = testutil.SignedTransfer(addr0, priKey3, 5, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
 	accMap = make(map[string][]action.SealedEnvelope)
-	accMap[tsf1.SrcAddr()] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4, tsf5}
+	accMap[addr3] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4, tsf5}
 	blk, err = bc.MintNewBlock(
 		accMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -176,25 +178,25 @@ func addTestingTsfBlocks(bc Blockchain) error {
 
 	// Add block 3
 	// Delta --> B, E, F, test
-	tsf1, err = testutil.SignedTransfer(addr4, addr2, priKey4, 1, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf1, err = testutil.SignedTransfer(addr2, priKey4, 1, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf2, err = testutil.SignedTransfer(addr4, addr5, priKey4, 2, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf2, err = testutil.SignedTransfer(addr5, priKey4, 2, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf3, err = testutil.SignedTransfer(addr4, addr6, priKey4, 3, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf3, err = testutil.SignedTransfer(addr6, priKey4, 3, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf4, err = testutil.SignedTransfer(addr4, addr0, priKey4, 4, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf4, err = testutil.SignedTransfer(addr0, priKey4, 4, big.NewInt(1), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
 
 	accMap = make(map[string][]action.SealedEnvelope)
-	accMap[tsf1.SrcAddr()] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4}
+	accMap[addr4] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4}
 	blk, err = bc.MintNewBlock(
 		accMap,
 		ta.Keyinfo["producer"].PubKey,
@@ -215,42 +217,42 @@ func addTestingTsfBlocks(bc Blockchain) error {
 
 	// Add block 4
 	// Delta --> A, B, C, D, F, test
-	tsf1, err = testutil.SignedTransfer(addr5, addr1, priKey5, 1, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf1, err = testutil.SignedTransfer(addr1, priKey5, 1, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf2, err = testutil.SignedTransfer(addr5, addr2, priKey5, 2, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf2, err = testutil.SignedTransfer(addr2, priKey5, 2, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf3, err = testutil.SignedTransfer(addr5, addr3, priKey5, 3, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf3, err = testutil.SignedTransfer(addr3, priKey5, 3, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf4, err = testutil.SignedTransfer(addr5, addr4, priKey5, 4, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf4, err = testutil.SignedTransfer(addr4, priKey5, 4, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf5, err = testutil.SignedTransfer(addr5, addr6, priKey5, 5, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf5, err = testutil.SignedTransfer(addr6, priKey5, 5, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	tsf6, err = testutil.SignedTransfer(addr5, addr0, priKey5, 6, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf6, err = testutil.SignedTransfer(addr0, priKey5, 6, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	vote1, err := testutil.SignedVote(addr3, addr3, priKey3, 6, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	vote1, err := testutil.SignedVote(addr3, priKey3, 6, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
-	vote2, err := testutil.SignedVote(addr1, addr1, priKey1, 1, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	vote2, err := testutil.SignedVote(addr1, priKey1, 1, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	if err != nil {
 		return err
 	}
 	accMap = make(map[string][]action.SealedEnvelope)
-	accMap[tsf1.SrcAddr()] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4, tsf5, tsf6}
-	accMap[vote1.SrcAddr()] = []action.SealedEnvelope{vote1}
-	accMap[vote2.SrcAddr()] = []action.SealedEnvelope{vote2}
+	accMap[addr5] = []action.SealedEnvelope{tsf1, tsf2, tsf3, tsf4, tsf5, tsf6}
+	accMap[addr3] = []action.SealedEnvelope{vote1}
+	accMap[addr1] = []action.SealedEnvelope{vote2}
 
 	blk, err = bc.MintNewBlock(
 		accMap,
@@ -323,7 +325,7 @@ func TestCreateBlockchain(t *testing.T) {
 	fmt.Printf("Serialize/Deserialize Block merkle = %x match\n", blkhash)
 
 	// add 4 sample blocks
-	require.Nil(addTestingTsfBlocks(bc))
+	require.NoError(addTestingTsfBlocks(bc))
 	height = bc.TipHeight()
 	require.Equal(5, int(height))
 }
@@ -338,48 +340,34 @@ func TestBlockchain_MintNewBlock(t *testing.T) {
 	require.NoError(t, bc.Start(ctx))
 	defer require.NoError(t, bc.Stop(ctx))
 
-	pk, _ := keypair.DecodePublicKey(Gen.CreatorPubKey)
-	// The signature should only matches the transfer amount 3000000000
-	sig, err := hex.DecodeString("c05c3ff8c9820038c03881c97f544593619ca4d1617c7c6d695aaf828339da9616877649d70948094a05a86b171320d1aae9afa4432606be3b263f808e11816e00")
+	tsf, err := action.NewTransfer(
+		1,
+		big.NewInt(3000000000),
+		ta.Addrinfo["producer"].String(),
+		[]byte{}, uint64(100000),
+		big.NewInt(10),
+	)
 	require.NoError(t, err)
-
-	cases := make(map[int64]bool)
-	cases[0] = true
-	cases[1] = false
-	for k, v := range cases {
-		tsf, err := action.NewTransfer(
-			1,
-			big.NewInt(3000000000+k),
-			Gen.CreatorAddr(),
-			ta.Addrinfo["producer"].String(),
-			[]byte{}, uint64(100000),
-			big.NewInt(10),
-		)
-		require.NoError(t, err)
-		bd := &action.EnvelopeBuilder{}
-		elp := bd.SetAction(tsf).
-			SetDestinationAddress(ta.Addrinfo["producer"].String()).
-			SetNonce(1).
-			SetGasLimit(100000).
-			SetGasPrice(big.NewInt(10)).Build()
-
-		selp := action.AssembleSealedEnvelope(elp, Gen.CreatorAddr(), pk, sig)
-		actionMap := make(map[string][]action.SealedEnvelope)
-		actionMap[selp.SrcAddr()] = []action.SealedEnvelope{selp}
-		_, err = bc.MintNewBlock(
-			actionMap,
-			ta.Keyinfo["producer"].PubKey,
-			ta.Keyinfo["producer"].PriKey,
-			ta.Addrinfo["producer"].String(),
-			0,
-		)
-		if v {
-			require.NoError(t, err)
-		} else {
-			require.Error(t, err)
-		}
-	}
-
+	bd := &action.EnvelopeBuilder{}
+	elp := bd.SetAction(tsf).
+		SetDestinationAddress(ta.Addrinfo["producer"].String()).
+		SetNonce(1).
+		SetGasLimit(100000).
+		SetGasPrice(big.NewInt(10)).Build()
+	genSK, err := keypair.DecodePrivateKey(GenesisProducerPrivateKey)
+	require.NoError(t, err)
+	selp, err := action.Sign(elp, genSK)
+	require.NoError(t, err)
+	actionMap := make(map[string][]action.SealedEnvelope)
+	actionMap[Gen.CreatorAddr()] = []action.SealedEnvelope{selp}
+	_, err = bc.MintNewBlock(
+		actionMap,
+		ta.Keyinfo["producer"].PubKey,
+		ta.Keyinfo["producer"].PriKey,
+		ta.Addrinfo["producer"].String(),
+		0,
+	)
+	require.NoError(t, err)
 }
 
 type MockSubscriber struct {
@@ -530,16 +518,7 @@ func TestLoadBlockchainfromDB(t *testing.T) {
 	fmt.Printf("Current tip = %d hash = %x\n", h, blkhash)
 
 	// add block with wrong height
-	selp, err := testutil.SignedTransfer(
-		ta.Addrinfo["producer"].String(),
-		ta.Addrinfo["bravo"].String(),
-		ta.Keyinfo["producer"].PriKey,
-		1,
-		big.NewInt(50),
-		nil,
-		genesis.ActionGasLimit,
-		big.NewInt(0),
-	)
+	selp, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 1, big.NewInt(50), nil, genesis.ActionGasLimit, big.NewInt(0))
 	require.NoError(err)
 
 	nblk, err := block.NewTestingBuilder().
@@ -555,16 +534,7 @@ func TestLoadBlockchainfromDB(t *testing.T) {
 	fmt.Printf("Cannot validate block %d: %v\n", blk.Height(), err)
 
 	// add block with zero prev hash
-	selp2, err := testutil.SignedTransfer(
-		ta.Addrinfo["producer"].String(),
-		ta.Addrinfo["bravo"].String(),
-		ta.Keyinfo["producer"].PriKey,
-		1,
-		big.NewInt(50),
-		nil,
-		genesis.ActionGasLimit,
-		big.NewInt(0),
-	)
+	selp2, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 1, big.NewInt(50), nil, genesis.ActionGasLimit, big.NewInt(0))
 	require.NoError(err)
 
 	nblk, err = block.NewTestingBuilder().
@@ -761,16 +731,7 @@ func TestLoadBlockchainfromDBWithoutExplorer(t *testing.T) {
 	require.Equal(blkhash, blk.HashBlock())
 	fmt.Printf("Current tip = %d hash = %x\n", h, blkhash)
 	// add block with wrong height
-	selp, err := testutil.SignedTransfer(
-		ta.Addrinfo["producer"].String(),
-		ta.Addrinfo["bravo"].String(),
-		ta.Keyinfo["producer"].PriKey,
-		1,
-		big.NewInt(50),
-		nil,
-		genesis.ActionGasLimit,
-		big.NewInt(0),
-	)
+	selp, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 1, big.NewInt(50), nil, genesis.ActionGasLimit, big.NewInt(0))
 	require.NoError(err)
 
 	nblk, err := block.NewTestingBuilder().
@@ -785,16 +746,7 @@ func TestLoadBlockchainfromDBWithoutExplorer(t *testing.T) {
 	require.NotNil(err)
 	fmt.Printf("Cannot validate block %d: %v\n", blk.Height(), err)
 	// add block with zero prev hash
-	selp2, err := testutil.SignedTransfer(
-		ta.Addrinfo["producer"].String(),
-		ta.Addrinfo["bravo"].String(),
-		ta.Keyinfo["producer"].PriKey,
-		1,
-		big.NewInt(50),
-		nil,
-		genesis.ActionGasLimit,
-		big.NewInt(0),
-	)
+	selp2, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 1, big.NewInt(50), nil, genesis.ActionGasLimit, big.NewInt(0))
 	require.NoError(err)
 
 	nblk, err = block.NewTestingBuilder().
@@ -978,7 +930,7 @@ func TestBlocks(t *testing.T) {
 		actionMap := make(map[string][]action.SealedEnvelope)
 		actionMap[a] = []action.SealedEnvelope{}
 		for i := 0; i < 1000; i++ {
-			tsf, err := testutil.SignedTransfer(a, c, priKeyA, 1, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+			tsf, err := testutil.SignedTransfer(c, priKeyA, 1, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 			require.NoError(err)
 			acts = append(acts, tsf)
 			actionMap[a] = append(actionMap[a], tsf)
@@ -1044,11 +996,11 @@ func TestActions(t *testing.T) {
 	bc.Validator().AddActionValidators(account.NewProtocol(), vote.NewProtocol(bc))
 	actionMap := make(map[string][]action.SealedEnvelope)
 	for i := 0; i < 5000; i++ {
-		tsf, err := testutil.SignedTransfer(a, c, priKeyA, 1, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+		tsf, err := testutil.SignedTransfer(c, priKeyA, 1, big.NewInt(2), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 		require.NoError(err)
 		actionMap[a] = append(actionMap[a], tsf)
 
-		vote, err := testutil.SignedVote(a, a, priKeyA, 1, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+		vote, err := testutil.SignedVote(a, priKeyA, 1, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 		require.NoError(err)
 		actionMap[a] = append(actionMap[a], vote)
 	}
