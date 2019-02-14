@@ -22,6 +22,8 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/account"
 	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
+	"github.com/iotexproject/iotex-core/action/protocol/rewarding"
+	"github.com/iotexproject/iotex-core/action/protocol/vote"
 	"github.com/iotexproject/iotex-core/actpool/actioniterator"
 	"github.com/iotexproject/iotex-core/address"
 	"github.com/iotexproject/iotex-core/blockchain/block"
@@ -34,6 +36,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/lifecycle"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/prometheustimer"
+	"github.com/iotexproject/iotex-core/pkg/util/fileutil"
 	"github.com/iotexproject/iotex-core/state"
 	"github.com/iotexproject/iotex-core/state/factory"
 )
@@ -113,6 +116,8 @@ type Blockchain interface {
 	TipHeight() uint64
 	// StateByAddr returns account of a given address
 	StateByAddr(address string) (*state.Account, error)
+	// RecoverChainAndState recovers the chain to target height and refresh state db if necessary
+	RecoverChainAndState(targetHeight uint64) error
 
 	// For block operations
 	// MintNewBlock creates a new block with given actions
@@ -163,6 +168,9 @@ type blockchain struct {
 
 	// used by account-based model
 	sf factory.Factory
+
+	genesisConfig genesis.Genesis
+	registry      *protocol.Registry
 }
 
 // Option sets blockchain construction parameter
@@ -244,6 +252,22 @@ func ClockOption(clk clock.Clock) Option {
 	}
 }
 
+// RegistryOption sets the blockchain with the protocol registry
+func RegistryOption(registry *protocol.Registry) Option {
+	return func(bc *blockchain, conf config.Config) error {
+		bc.registry = registry
+		return nil
+	}
+}
+
+// GenesisOption sets the blockchain with the genesis configs
+func GenesisOption(genesisConfig genesis.Genesis) Option {
+	return func(bc *blockchain, conf config.Config) error {
+		bc.genesisConfig = genesisConfig
+		return nil
+	}
+}
+
 // NewBlockchain creates a new blockchain and DB instance
 func NewBlockchain(cfg config.Config, opts ...Option) Blockchain {
 	// create the Blockchain
@@ -254,8 +278,7 @@ func NewBlockchain(cfg config.Config, opts ...Option) Blockchain {
 	}
 	for _, opt := range opts {
 		if err := opt(chain, cfg); err != nil {
-			log.S().Errorf("Failed to execute blockchain creation option %p: %v", opt, err)
-			return nil
+			log.S().Panicf("Failed to execute blockchain creation option %p: %v", opt, err)
 		}
 	}
 	timerFactory, err := prometheustimer.New(
@@ -265,22 +288,14 @@ func NewBlockchain(cfg config.Config, opts ...Option) Blockchain {
 		[]string{"default", strconv.FormatUint(uint64(cfg.Chain.ID), 10)},
 	)
 	if err != nil {
-		log.L().Error("Failed to generate prometheus timer factory.", zap.Error(err))
+		log.L().Panic("Failed to generate prometheus timer factory.", zap.Error(err))
 	}
 	chain.timerFactory = timerFactory
 	// Set block validator
-	pubKey, _, err := cfg.KeyPair()
 	if err != nil {
-		log.L().Error("Failed to get key pair of producer.", zap.Error(err))
-		return nil
+		log.L().Panic("Failed to get block producer address.", zap.Error(err))
 	}
-	pkHash := keypair.HashPubKey(pubKey)
-	address, err := address.FromBytes(pkHash[:])
-	if err != nil {
-		log.L().Error("Failed to get producer's address by public key.", zap.Error(err))
-		return nil
-	}
-	chain.validator = &validator{sf: chain.sf, validatorAddr: address.String()}
+	chain.validator = &validator{sf: chain.sf, validatorAddr: producerAddress(cfg).String()}
 
 	if chain.dao != nil {
 		chain.lifecycle.Add(chain.dao)
@@ -323,7 +338,7 @@ func (bc *blockchain) Start(ctx context.Context) (err error) {
 	if bc.tipHash, err = bc.dao.getBlockHash(bc.tipHeight); err != nil {
 		return err
 	}
-	return bc.startExistingBlockchain(bc.config.Chain.RecoveryHeight)
+	return bc.startExistingBlockchain()
 }
 
 // Stop stops the blockchain.
@@ -670,40 +685,56 @@ func (bc *blockchain) MintNewBlock(
 	mintNewBlockTimer := bc.timerFactory.NewTimer("MintNewBlock")
 	defer mintNewBlockTimer.End()
 
-	// initial action iterator
-	actionIterator := actioniterator.NewActionIterator(actionMap)
-	actions, err := PickAction(genesis.BlockGasLimit, actionIterator)
+	newblockHeight := bc.tipHeight + 1
+	// run execution and update state trie root hash
+	ws, err := bc.sf.NewWorkingSet()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to pick actions")
+		return nil, errors.Wrap(err, "Failed to obtain working set from state factory")
 	}
+	producer, err := address.FromString(producerAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	gasLimitForContext := bc.genesisConfig.BlockGasLimit
+	ctx := protocol.WithRunActionsCtx(context.Background(),
+		protocol.RunActionsCtx{
+			EpochNumber: getEpochNum(
+				newblockHeight,
+				bc.genesisConfig.NumDelegates,
+				bc.genesisConfig.NumSubEpochs,
+			),
+			BlockHeight: newblockHeight,
+			// this field should be removed
+			BlockHash:       hash.ZeroHash256,
+			BlockTimeStamp:  bc.now(),
+			Producer:        producer,
+			GasLimit:        &gasLimitForContext,
+			ActionGasLimit:  bc.genesisConfig.ActionGasLimit,
+			EnableGasCharge: bc.config.Chain.EnableGasCharge,
+		})
+	root, rc, actions, err := bc.pickAndRunActions(ctx, actionMap, ws)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to update state changes in new block %d", newblockHeight)
+	}
+
+	ra := block.NewRunnableActionsBuilder().
+		SetHeight(newblockHeight).
+		SetTimeStamp(timestamp).
+		AddActions(actions...).
+		Build(producerAddr, producerPubKey)
 
 	validateActionsOnlyTimer := bc.timerFactory.NewTimer("ValidateActionsOnly")
 	if err := bc.validator.ValidateActionsOnly(
 		actions,
 		producerPubKey,
 		bc.ChainID(),
-		bc.tipHeight+1,
+		newblockHeight,
 	); err != nil {
 		validateActionsOnlyTimer.End()
 		return nil, err
 	}
 	validateActionsOnlyTimer.End()
-
-	ra := block.NewRunnableActionsBuilder().
-		SetHeight(bc.tipHeight+1).
-		SetTimeStamp(timestamp).
-		AddActions(actions...).
-		Build(producerAddr, producerPubKey)
-
-	// run execution and update state trie root hash
-	ws, err := bc.sf.NewWorkingSet()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain working set from state factory")
-	}
-	root, rc, err := bc.runActions(ra, ws)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to update state changes in new block %d", bc.tipHeight+1)
-	}
 
 	blk, err := block.NewBuilder(ra).
 		SetChainID(bc.config.Chain.ID).
@@ -805,7 +836,7 @@ func (bc *blockchain) ExecuteContractRead(caller address.Address, ex *action.Exe
 	if err != nil {
 		return nil, err
 	}
-	gasLimit := genesis.BlockGasLimit
+	gasLimit := bc.genesisConfig.BlockGasLimit
 	raCtx := protocol.RunActionsCtx{
 		BlockHeight:     blk.Height(),
 		BlockHash:       blk.HashBlock(),
@@ -840,7 +871,7 @@ func (bc *blockchain) CreateState(addr string, init *big.Int) (*state.Account, e
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get genesis block")
 	}
-	gasLimit := genesis.BlockGasLimit
+	gasLimit := bc.genesisConfig.BlockGasLimit
 	callerAddr, err := address.FromString(addr)
 	if err != nil {
 		return nil, err
@@ -854,6 +885,7 @@ func (bc *blockchain) CreateState(addr string, init *big.Int) (*state.Account, e
 			EpochNumber:     0,
 			Producer:        producer,
 			GasLimit:        &gasLimit,
+			ActionGasLimit:  bc.genesisConfig.ActionGasLimit,
 			EnableGasCharge: bc.config.Chain.EnableGasCharge,
 			Caller:          callerAddr,
 			ActionHash:      hash.ZeroHash256,
@@ -866,6 +898,28 @@ func (bc *blockchain) CreateState(addr string, init *big.Int) (*state.Account, e
 		return nil, errors.Wrap(err, "failed to commit the account creation")
 	}
 	return account, nil
+}
+
+// RecoverChainAndState recovers the chain to target height and refresh state db if necessary
+func (bc *blockchain) RecoverChainAndState(targetHeight uint64) error {
+	var buildStateFromScratch bool
+	stateHeight, err := bc.sf.Height()
+	if err != nil {
+		buildStateFromScratch = true
+	}
+	if targetHeight > 0 {
+		if err := bc.recoverToHeight(targetHeight); err != nil {
+			return errors.Wrapf(err, "failed to recover blockchain to target height %d", targetHeight)
+		}
+		if stateHeight > bc.tipHeight {
+			buildStateFromScratch = true
+		}
+	}
+
+	if buildStateFromScratch {
+		return bc.refreshStateDB()
+	}
+	return nil
 }
 
 //======================================
@@ -910,6 +964,11 @@ func (bc *blockchain) startEmptyBlockchain() error {
 			return errors.Wrap(err, "failed to update state changes in Genesis block")
 		}
 
+		// Initialize the states before any actions happen on the blockchain
+		if err := bc.createGenesisStates(ws); err != nil {
+			return err
+		}
+
 		genesis, err = block.NewBuilder(racts).
 			SetChainID(bc.ChainID()).
 			SetPrevBlockHash(Gen.ParentHash).
@@ -942,69 +1001,26 @@ func (bc *blockchain) startEmptyBlockchain() error {
 	return nil
 }
 
-func (bc *blockchain) startExistingBlockchain(recoveryHeight uint64) error {
+func (bc *blockchain) startExistingBlockchain() error {
 	if bc.sf == nil {
 		return errors.New("statefactory cannot be nil")
 	}
-	var startHeight uint64
-	if factoryHeight, err := bc.sf.Height(); err == nil {
-		if factoryHeight > bc.tipHeight {
-			return errors.New("factory is higher than blockchain")
-		}
-		startHeight = factoryHeight + 1
-	}
-	ws, err := bc.sf.NewWorkingSet()
+
+	stateHeight, err := bc.sf.Height()
 	if err != nil {
-		return errors.Wrap(err, "failed to obtain working set from state factory")
+		return errors.New("invalid state DB")
 	}
-	// If restarting factory from fresh db, first update state changes in Genesis block
-	if startHeight == 0 {
-		pk, _, addr, err := bc.genesisProducer()
-		if err != nil {
-			return errors.Wrap(err, "failed to get the key and address of producer")
-		}
-		acts := NewGenesisActions(bc.config.Chain, ws)
-		racts := block.NewRunnableActionsBuilder().
-			SetHeight(0).
-			SetTimeStamp(Gen.Timestamp).
-			AddActions(acts...).
-			Build(addr, pk)
-		// run execution and update state trie root hash
-		if _, _, err := bc.runActions(racts, ws); err != nil {
-			return errors.Wrap(err, "failed to update state changes in Genesis block")
-		}
-		if err := bc.sf.Commit(ws); err != nil {
-			return errors.Wrap(err, "failed to update state changes in Genesis block")
-		}
-		startHeight = 1
+	if stateHeight > bc.tipHeight {
+		return errors.New("factory is higher than blockchain")
 	}
-	if recoveryHeight > 0 {
-		for bc.tipHeight > recoveryHeight {
-			if err := bc.dao.deleteTipBlock(); err != nil {
-				return err
-			}
-			bc.tipHeight--
-		}
-		if startHeight > bc.tipHeight {
-			startHeight = 0
-			// Delete existing state DB and reinitialize it
-			if err := os.Remove(bc.config.Chain.TrieDBPath); err != nil {
-				return errors.Wrap(err, "failed to delete existing state DB")
-			}
-			if err := DefaultStateFactoryOption()(bc, bc.config); err != nil {
-				return errors.Wrap(err, "failed to reinitialize state DB")
-			}
-			if err := bc.sf.Start(context.Background()); err != nil {
-				return errors.Wrap(err, "failed to start state factory")
-			}
-		}
-	}
-	for i := startHeight; i <= bc.tipHeight; i++ {
+
+	for i := stateHeight + 1; i <= bc.tipHeight; i++ {
 		blk, err := bc.getBlockByHeight(i)
 		if err != nil {
 			return err
 		}
-		if ws, err = bc.sf.NewWorkingSet(); err != nil {
+		ws, err := bc.sf.NewWorkingSet()
+		if err != nil {
 			return errors.Wrap(err, "failed to obtain working set from state factory")
 		}
 		if _, _, err := bc.runActions(blk.RunnableActions(), ws); err != nil {
@@ -1014,14 +1030,14 @@ func (bc *blockchain) startExistingBlockchain(recoveryHeight uint64) error {
 			return err
 		}
 	}
-	factoryHeight, err := bc.sf.Height()
+	stateHeight, err = bc.sf.Height()
 	if err != nil {
 		return errors.Wrap(err, "failed to get factory's height")
 	}
 	log.L().Info("Restarting blockchain.",
 		zap.Uint64("chainHeight",
 			bc.tipHeight),
-		zap.Uint64("factoryHeight", factoryHeight))
+		zap.Uint64("factoryHeight", stateHeight))
 	return nil
 }
 
@@ -1117,24 +1133,88 @@ func (bc *blockchain) runActions(
 	if bc.sf == nil {
 		return hash.ZeroHash256, nil, errors.New("statefactory cannot be nil")
 	}
-	gasLimit := genesis.BlockGasLimit
+	gasLimit := bc.genesisConfig.BlockGasLimit
 	// update state factory
 	producer, err := address.FromString(acts.BlockProducerAddr())
 	if err != nil {
 		return hash.ZeroHash256, nil, err
 	}
+
 	ctx := protocol.WithRunActionsCtx(context.Background(),
 		protocol.RunActionsCtx{
-			EpochNumber:     0, // TODO: need to get the actual epoch number from RollDPoS
-			BlockHeight:     acts.BlockHeight(),
-			BlockHash:       acts.TxHash(),
+			EpochNumber: getEpochNum(
+				acts.BlockHeight(),
+				bc.genesisConfig.NumDelegates,
+				bc.genesisConfig.NumSubEpochs,
+			),
+			BlockHeight: acts.BlockHeight(),
+			// this field should be removed
+			BlockHash:       hash.ZeroHash256,
 			BlockTimeStamp:  int64(acts.BlockTimeStamp()),
 			Producer:        producer,
 			GasLimit:        &gasLimit,
+			ActionGasLimit:  bc.genesisConfig.ActionGasLimit,
 			EnableGasCharge: bc.config.Chain.EnableGasCharge,
 		})
 
 	return ws.RunActions(ctx, acts.BlockHeight(), acts.Actions())
+}
+
+func (bc *blockchain) pickAndRunActions(ctx context.Context, actionMap map[string][]action.SealedEnvelope,
+	ws factory.WorkingSet) (hash.Hash256, []*action.Receipt, []action.SealedEnvelope, error) {
+	if bc.sf == nil {
+		return hash.ZeroHash256, nil, nil, errors.New("statefactory cannot be nil")
+	}
+	receipts := make([]*action.Receipt, 0)
+	executedActions := make([]action.SealedEnvelope, 0)
+
+	raCtx, ok := protocol.GetRunActionsCtx(ctx)
+	if !ok {
+		return hash.ZeroHash256, nil, nil, errors.New("failed to get action context")
+	}
+	// initial action iterator
+	actionIterator := actioniterator.NewActionIterator(actionMap)
+	for {
+		nextAction, ok := actionIterator.Next()
+		if !ok {
+			break
+		}
+
+		receipt, err := ws.RunAction(ctx, nextAction)
+		if err != nil {
+			if errors.Cause(err) == action.ErrHitGasLimit {
+				// hit block gas limit, we should not process actions belong to this user anymore since we
+				// need monotonically increasing nounce. But we can continue processing other actions
+				// that belong other users
+				actionIterator.PopAccount()
+				continue
+			}
+			return hash.ZeroHash256, nil, nil, errors.Wrapf(err, "Failed to update state changes for selp %s", nextAction.Hash())
+		}
+		if receipt != nil {
+			receipts = append(receipts, receipt)
+		}
+		executedActions = append(executedActions, nextAction)
+
+		// To prevent loop all actions in act_pool, we stop processing action when remaining gas is below
+		// than certain threshold
+		if *raCtx.GasLimit < bc.config.Chain.AllowedBlockGasResidue {
+			break
+		}
+	}
+
+	// Process grant block reward action
+	grant, err := bc.createGrantBlockRewardAction()
+	if err != nil {
+		return hash.ZeroHash256, nil, nil, err
+	}
+	receipt, err := ws.RunAction(ctx, grant)
+	if receipt != nil {
+		receipts = append(receipts, receipt)
+	}
+	executedActions = append(executedActions, grant)
+
+	return ws.UpdateBlockLevelInfo(raCtx.BlockHeight), receipts, executedActions, nil
 }
 
 func (bc *blockchain) emitToSubscribers(blk *block.Block) {
@@ -1169,6 +1249,119 @@ func (bc *blockchain) genesisProducer() (keypair.PublicKey, keypair.PrivateKey, 
 	return pk, sk, addr.String(), nil
 }
 
+// RecoverToHeight recovers the blockchain to target height
+func (bc *blockchain) recoverToHeight(targetHeight uint64) error {
+	for bc.tipHeight > targetHeight {
+		if err := bc.dao.deleteTipBlock(); err != nil {
+			return err
+		}
+		bc.tipHeight--
+	}
+	return nil
+}
+
+// RefreshStateDB deletes the existing state DB and creates a new one with state changes from genesis block
+func (bc *blockchain) refreshStateDB() error {
+	// Delete existing state DB and reinitialize it
+	if fileutil.FileExists(bc.config.Chain.TrieDBPath) && os.Remove(bc.config.Chain.TrieDBPath) != nil {
+		return errors.New("failed to delete existing state DB")
+	}
+	if err := DefaultStateFactoryOption()(bc, bc.config); err != nil {
+		return errors.Wrap(err, "failed to reinitialize state DB")
+	}
+	// Install vote protocol
+	voteProtocol := vote.NewProtocol(bc)
+	bc.sf.AddActionHandlers(voteProtocol)
+
+	if err := bc.sf.Start(context.Background()); err != nil {
+		return errors.Wrap(err, "failed to start state factory")
+	}
+	if err := bc.buildStateInGenesis(); err != nil {
+		return errors.Wrap(err, "failed to build state for genesis block")
+	}
+	if err := bc.sf.Stop(context.Background()); err != nil {
+		return errors.Wrap(err, "failed to stop state factory")
+	}
+	return nil
+}
+
+func (bc *blockchain) buildStateInGenesis() error {
+	pk, _, addr, err := bc.genesisProducer()
+	if err != nil {
+		return errors.Wrap(err, "failed to get the key and address of producer")
+	}
+	ws, err := bc.sf.NewWorkingSet()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain working set from state factory")
+	}
+	acts := NewGenesisActions(bc.config.Chain, ws)
+	racts := block.NewRunnableActionsBuilder().
+		SetHeight(0).
+		SetTimeStamp(Gen.Timestamp).
+		AddActions(acts...).
+		Build(addr, pk)
+	// run execution and update state trie root hash
+	if _, _, err := bc.runActions(racts, ws); err != nil {
+		return errors.Wrap(err, "failed to update state changes in Genesis block")
+	}
+	if err := bc.sf.Commit(ws); err != nil {
+		return errors.Wrap(err, "failed to commit state changes in Genesis block")
+	}
+	return nil
+}
+
+func (bc *blockchain) createGrantBlockRewardAction() (action.SealedEnvelope, error) {
+	gb := action.GrantRewardBuilder{}
+	grant := gb.SetRewardType(action.BlockReward).Build()
+	eb := action.EnvelopeBuilder{}
+	envelope := eb.SetNonce(0).
+		SetGasPrice(big.NewInt(0)).
+		SetGasLimit(grant.GasLimit()).
+		SetAction(&grant).
+		Build()
+	_, sk, err := bc.config.KeyPair()
+	if err != nil {
+		log.L().Panic("Failed to get block producer private key.", zap.Error(err))
+	}
+	return action.Sign(envelope, sk)
+}
+
+func (bc *blockchain) createGenesisStates(ws factory.WorkingSet) error {
+	if bc.registry == nil {
+		// TODO: return nil to avoid test cases to blame on missing rewarding protocol
+		return nil
+	}
+	ctx := protocol.WithRunActionsCtx(context.Background(), protocol.RunActionsCtx{
+		EpochNumber:     0,
+		BlockHeight:     0,
+		BlockHash:       hash.ZeroHash256,
+		BlockTimeStamp:  bc.genesisConfig.Timestamp,
+		GasLimit:        nil,
+		ActionGasLimit:  bc.genesisConfig.ActionGasLimit,
+		EnableGasCharge: true,
+		Producer:        nil,
+		Caller:          nil,
+		ActionHash:      hash.ZeroHash256,
+		Nonce:           0,
+	})
+	p, ok := bc.registry.Find(rewarding.ProtocolID)
+	if !ok {
+		return errors.Errorf("protocol %s isn't found", rewarding.ProtocolID)
+	}
+	rp, ok := p.(*rewarding.Protocol)
+	if !ok {
+		return errors.Errorf("error when casting protocol")
+	}
+	return rp.Initialize(
+		ctx,
+		ws,
+		bc.genesisConfig.Rewarding.InitAdminAddr(),
+		bc.genesisConfig.InitBalance(),
+		bc.genesisConfig.BlockReward(),
+		bc.genesisConfig.EpochReward(),
+	)
+}
+
 func calculateReceiptRoot(receipts []*action.Receipt) hash.Hash256 {
 	var h []hash.Hash256
 	for _, receipt := range receipts {
@@ -1179,4 +1372,26 @@ func calculateReceiptRoot(receipts []*action.Receipt) hash.Hash256 {
 	}
 	res := crypto.NewMerkleTree(h).HashTree()
 	return res
+}
+
+func producerAddress(cfg config.Config) address.Address {
+	pubKey, _, err := cfg.KeyPair()
+	if err != nil {
+		log.L().Panic("Failed to get block producer public key.", zap.Error(err))
+	}
+	pkHash := keypair.HashPubKey(pubKey)
+	address, err := address.FromBytes(pkHash[:])
+	if err != nil {
+		log.L().Panic("Failed to get block producer address.", zap.Error(err))
+	}
+	return address
+}
+
+// TODO: consolidate with the same method in consensus module
+func getEpochNum(
+	height uint64,
+	numDelegates uint64,
+	numSubEpochs uint64,
+) uint64 {
+	return (height-1)/uint64(numDelegates)/uint64(numSubEpochs) + 1
 }

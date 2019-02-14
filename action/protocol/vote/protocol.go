@@ -10,9 +10,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/iotexproject/iotex-core/pkg/log"
-
-	"github.com/iotexproject/go-ethereum/core/vm"
 	"github.com/pkg/errors"
 
 	"github.com/iotexproject/iotex-core/action"
@@ -20,12 +17,17 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol/account"
 	"github.com/iotexproject/iotex-core/action/protocol/vote/candidatesutil"
 	"github.com/iotexproject/iotex-core/address"
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
 
 const (
 	// VoteSizeLimit is the maximum size of vote allowed
 	VoteSizeLimit = 278
+
+	// ProtocolID is the protocol ID
+	// TODO: it works only for one instance per protocol definition now
+	ProtocolID = "vote"
 )
 
 // Protocol defines the protocol of handling votes
@@ -67,7 +69,7 @@ func (p *Protocol) Handle(ctx context.Context, act action.Action, sm protocol.St
 			return nil, errors.Wrapf(err, "failed to get intrinsic gas for vote hash %s", vote.Hash())
 		}
 		if *raCtx.GasLimit < gas {
-			return nil, vm.ErrOutOfGas
+			return nil, action.ErrHitGasLimit
 		}
 		gasFee := big.NewInt(0).Mul(vote.GasPrice(), big.NewInt(0).SetUint64(gas))
 

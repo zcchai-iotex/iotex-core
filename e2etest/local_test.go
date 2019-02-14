@@ -10,6 +10,7 @@ import (
 	"context"
 	"math/big"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,11 +22,14 @@ import (
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/account"
+	"github.com/iotexproject/iotex-core/action/protocol/rewarding"
 	"github.com/iotexproject/iotex-core/action/protocol/vote"
 	"github.com/iotexproject/iotex-core/blockchain"
+	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/keypair"
+	"github.com/iotexproject/iotex-core/pkg/unit"
 	"github.com/iotexproject/iotex-core/server/itx"
 	ta "github.com/iotexproject/iotex-core/test/testaddress"
 	"github.com/iotexproject/iotex-core/testutil"
@@ -46,6 +50,7 @@ func TestLocalCommit(t *testing.T) {
 
 	cfg, err := newTestConfig()
 	require.Nil(err)
+	genesisCfg := genesis.Default
 
 	// create server
 	ctx := context.Background()
@@ -131,7 +136,7 @@ func TestLocalCommit(t *testing.T) {
 	change.Add(change, test)
 
 	require.Equal(
-		blockchain.ConvertIotxToRau(3000000000),
+		unit.ConvertIotxToRau(3000000000),
 		change,
 	)
 	t.Log("Total balance match")
@@ -148,11 +153,19 @@ func TestLocalCommit(t *testing.T) {
 	cfg.Chain.ChainDBPath = testDBPath2
 	require.NoError(copyDB(testTriePath, testTriePath2))
 	require.NoError(copyDB(testDBPath, testDBPath2))
-	chain := blockchain.NewBlockchain(cfg, blockchain.DefaultStateFactoryOption(), blockchain.BoltDBDaoOption())
-	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain))
+	registry := protocol.Registry{}
+	rewardingProtocol := rewarding.NewProtocol()
+	registry.Register(rewarding.ProtocolID, rewardingProtocol)
+	chain := blockchain.NewBlockchain(
+		cfg,
+		blockchain.DefaultStateFactoryOption(),
+		blockchain.BoltDBDaoOption(),
+		blockchain.GenesisOption(genesisCfg),
+		blockchain.RegistryOption(&registry),
+	)
+	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain, genesisCfg.Blockchain.ActionGasLimit))
 	chain.Validator().AddActionValidators(account.NewProtocol())
-	require.NotNil(chain)
-	chain.GetFactory().AddActionHandlers(account.NewProtocol(), vote.NewProtocol(chain))
+	chain.GetFactory().AddActionHandlers(account.NewProtocol(), vote.NewProtocol(chain), rewardingProtocol)
 	require.NoError(chain.Start(ctx))
 	require.True(5 == bc.TipHeight())
 	defer func() {
@@ -341,7 +354,7 @@ func TestLocalCommit(t *testing.T) {
 	change.Add(change, test)
 
 	require.Equal(
-		blockchain.ConvertIotxToRau(3000000000),
+		unit.ConvertIotxToRau(3000000000),
 		change,
 	)
 	t.Log("Total balance match")
@@ -483,6 +496,7 @@ func TestVoteLocalCommit(t *testing.T) {
 	cfg, err := newTestConfig()
 	cfg.Chain.NumCandidates = 2
 	require.Nil(err)
+	genesisCfg := genesis.Default
 
 	// create node
 	ctx := context.Background()
@@ -522,12 +536,20 @@ func TestVoteLocalCommit(t *testing.T) {
 	cfg.Chain.ChainDBPath = testDBPath2
 	require.NoError(copyDB(testTriePath, testTriePath2))
 	require.NoError(copyDB(testDBPath, testDBPath2))
-	chain := blockchain.NewBlockchain(cfg, blockchain.DefaultStateFactoryOption(), blockchain.BoltDBDaoOption())
-	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain))
+	registry := protocol.Registry{}
+	rewardingProtocol := rewarding.NewProtocol()
+	registry.Register(rewarding.ProtocolID, rewardingProtocol)
+	chain := blockchain.NewBlockchain(
+		cfg,
+		blockchain.DefaultStateFactoryOption(),
+		blockchain.BoltDBDaoOption(),
+		blockchain.GenesisOption(genesisCfg),
+	)
+	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain, genesisCfg.Blockchain.ActionGasLimit))
 	chain.Validator().AddActionValidators(account.NewProtocol(),
 		vote.NewProtocol(chain))
 	require.NotNil(chain)
-	chain.GetFactory().AddActionHandlers(account.NewProtocol(), vote.NewProtocol(chain))
+	chain.GetFactory().AddActionHandlers(account.NewProtocol(), vote.NewProtocol(chain), rewardingProtocol)
 	require.NoError(chain.Start(ctx))
 	require.True(5 == bc.TipHeight())
 	defer func() {
@@ -538,16 +560,16 @@ func TestVoteLocalCommit(t *testing.T) {
 
 	// Add block 1
 	// Alfa, Bravo and Charlie selfnomination
-	tsf1, err := testutil.SignedTransfer(ta.Addrinfo["alfa"].String(), ta.Keyinfo["producer"].PriKey, 7, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf1, err := testutil.SignedTransfer(ta.Addrinfo["alfa"].String(), ta.Keyinfo["producer"].PriKey, 7, unit.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	tsf2, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 8, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf2, err := testutil.SignedTransfer(ta.Addrinfo["bravo"].String(), ta.Keyinfo["producer"].PriKey, 8, unit.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	tsf3, err := testutil.SignedTransfer(ta.Addrinfo["charlie"].String(), ta.Keyinfo["producer"].PriKey, 9, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf3, err := testutil.SignedTransfer(ta.Addrinfo["charlie"].String(), ta.Keyinfo["producer"].PriKey, 9, unit.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
-	tsf4, err := testutil.SignedTransfer(ta.Addrinfo["delta"].String(), ta.Keyinfo["producer"].PriKey, 10, blockchain.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
+	tsf4, err := testutil.SignedTransfer(ta.Addrinfo["delta"].String(), ta.Keyinfo["producer"].PriKey, 10, unit.ConvertIotxToRau(200000000), []byte{}, testutil.TestGasLimit, big.NewInt(testutil.TestGasPrice))
 	require.NoError(err)
 
 	vote1, err := testutil.SignedVote(ta.Addrinfo["alfa"].String(), ta.Keyinfo["alfa"].PriKey, 1, 100000, big.NewInt(0))
@@ -778,47 +800,85 @@ func TestVoteLocalCommit(t *testing.T) {
 	require.Equal(ta.Addrinfo["alfa"].String(), candidatesAddr[1])
 }
 
-func TestBlockchainRecovery(t *testing.T) {
+func TestStartExistingBlockchain(t *testing.T) {
 	require := require.New(t)
+	ctx := context.Background()
 
 	testutil.CleanupPath(t, testTriePath)
 	testutil.CleanupPath(t, testDBPath)
 
-	cfg, err := newTestConfig()
-	require.Nil(err)
+	// Disable block reward to make bookkeeping easier
+	cfg := config.Default
+	cfg.Chain.TrieDBPath = testTriePath
+	cfg.Chain.ChainDBPath = testDBPath
+	cfg.Consensus.Scheme = config.NOOPScheme
+	cfg.Network.Port = testutil.RandomPort()
 
-	// create server
-	ctx := context.Background()
 	svr, err := itx.NewServer(cfg)
 	require.Nil(err)
 	require.NoError(svr.Start(ctx))
-
 	chainID := cfg.Chain.ID
 	bc := svr.ChainService(chainID).Blockchain()
 	require.NotNil(bc)
-	require.NoError(addTestingTsfBlocks(bc))
 
 	defer func() {
-		require.Nil(svr.Stop(ctx))
+		require.NoError(svr.Stop(ctx))
 		testutil.CleanupPath(t, testTriePath)
 		testutil.CleanupPath(t, testDBPath)
 	}()
 
-	// stop server and delete state db
-	require.NoError(svr.Stop(ctx))
+	require.NoError(addTestingTsfBlocks(bc))
+	require.Equal(uint64(5), bc.TipHeight())
+
+	// Delete state db and recover to tip
 	testutil.CleanupPath(t, testTriePath)
-
-	// restart server
+	require.NoError(svr.Stop(ctx))
+	err = svr.Start(ctx)
+	require.True(strings.Contains(err.Error(), "invalid state DB"))
+	// Refresh state DB
+	require.NoError(bc.RecoverChainAndState(0))
+	require.NoError(svr.Stop(ctx))
 	svr, err = itx.NewServer(cfg)
-	require.Nil(err)
+	require.NoError(err)
+	// Build states from height 1 to tip
 	require.NoError(svr.Start(ctx))
-
 	bc = svr.ChainService(chainID).Blockchain()
-	require.NotNil(bc)
-	blockchainHeight := bc.TipHeight()
-	factoryHeight, _ := bc.GetFactory().Height()
-	require.Equal(blockchainHeight, factoryHeight)
-	require.True(5 == blockchainHeight)
+	height, _ := bc.GetFactory().Height()
+	require.Equal(bc.TipHeight(), height)
+	candidates, err := bc.CandidatesByHeight(uint64(0))
+	require.NoError(err)
+	require.Equal(21, len(candidates))
+
+	// Recover to height 3 from empty state DB
+	testutil.CleanupPath(t, testTriePath)
+	require.NoError(bc.RecoverChainAndState(3))
+	require.NoError(svr.Stop(ctx))
+	svr, err = itx.NewServer(cfg)
+	require.NoError(err)
+	// Build states from height 1 to 3
+	require.NoError(svr.Start(ctx))
+	bc = svr.ChainService(chainID).Blockchain()
+	height, _ = bc.GetFactory().Height()
+	require.Equal(bc.TipHeight(), height)
+	require.Equal(uint64(3), height)
+	candidates, err = bc.CandidatesByHeight(uint64(0))
+	require.NoError(err)
+	require.Equal(21, len(candidates))
+
+	// Recover to height 2 from an existing state DB with Height 3
+	require.NoError(bc.RecoverChainAndState(2))
+	require.NoError(svr.Stop(ctx))
+	svr, err = itx.NewServer(cfg)
+	require.NoError(err)
+	// Build states from height 1 to 2
+	require.NoError(svr.Start(ctx))
+	bc = svr.ChainService(chainID).Blockchain()
+	height, _ = bc.GetFactory().Height()
+	require.Equal(bc.TipHeight(), height)
+	require.Equal(uint64(2), height)
+	candidates, err = bc.CandidatesByHeight(uint64(0))
+	require.NoError(err)
+	require.Equal(21, len(candidates))
 }
 
 func newTestConfig() (config.Config, error) {
