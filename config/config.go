@@ -90,7 +90,6 @@ var (
 			NumCandidates:                101,
 			EnableFallBackToFreshDB:      false,
 			EnableSubChainStartInGenesis: false,
-			EnableGasCharge:              false,
 			EnableTrielessStateDB:        true,
 			EnableIndex:                  false,
 			EnableAsyncIndexWrite:        false,
@@ -144,7 +143,7 @@ var (
 		API: API{
 			Enabled:   false,
 			UseRDS:    false,
-			Port:      14004,
+			Port:      14014,
 			TpsWindow: 10,
 			GasStation: GasStation{
 				SuggestBlockWindow: 20,
@@ -220,9 +219,6 @@ type (
 		EnableFallBackToFreshDB      bool   `yaml:"enableFallbackToFreshDb"`
 		EnableSubChainStartInGenesis bool   `yaml:"enableSubChainStartInGenesis"`
 		EnableTrielessStateDB        bool   `yaml:"enableTrielessStateDB"`
-
-		// enable gas charge for block producer
-		EnableGasCharge bool `yaml:"enableGasCharge"`
 		// enable index the block actions and receipts
 		EnableIndex bool `yaml:"enableIndex"`
 		// enable writing the block actions' and receipts' index asynchronously
@@ -288,9 +284,9 @@ type (
 
 	// GasStation is the gas station config
 	GasStation struct {
-		SuggestBlockWindow int `yaml:"suggestBlockWindow"`
-		DefaultGas         int `yaml:"defaultGas"`
-		Percentile         int `yaml:"Percentile"`
+		SuggestBlockWindow int    `yaml:"suggestBlockWindow"`
+		DefaultGas         uint64 `yaml:"defaultGas"`
+		Percentile         int    `yaml:"Percentile"`
 	}
 
 	// Indexer is the index service config

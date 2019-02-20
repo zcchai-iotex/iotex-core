@@ -41,7 +41,6 @@ func TestWrongRootHash(t *testing.T) {
 
 	blkhash := tsf1.Hash()
 	blk, err := block.NewTestingBuilder().
-		SetChainID(1).
 		SetHeight(1).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -66,7 +65,6 @@ func TestSignBlock(t *testing.T) {
 
 	blkhash := tsf1.Hash()
 	blk, err := block.NewTestingBuilder().
-		SetChainID(1).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -109,7 +107,6 @@ func TestWrongNonce(t *testing.T) {
 
 	blkhash := tsf1.Hash()
 	blk, err := block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -123,9 +120,8 @@ func TestWrongNonce(t *testing.T) {
 	gasLimit := testutil.TestGasLimit
 	ctx := protocol.WithRunActionsCtx(context.Background(),
 		protocol.RunActionsCtx{
-			Producer:        ta.Addrinfo["producer"],
-			GasLimit:        &gasLimit,
-			EnableGasCharge: testutil.EnableGasCharge,
+			Producer: ta.Addrinfo["producer"],
+			GasLimit: &gasLimit,
 		})
 	_, _, err = ws.RunActions(ctx, 1, []action.SealedEnvelope{tsf1})
 	require.NoError(err)
@@ -136,7 +132,6 @@ func TestWrongNonce(t *testing.T) {
 	require.NoError(err)
 
 	blk, err = block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -152,7 +147,6 @@ func TestWrongNonce(t *testing.T) {
 
 	blkhash = tsf1.Hash()
 	blk, err = block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -171,7 +165,6 @@ func TestWrongNonce(t *testing.T) {
 	require.NoError(err)
 	blkhash = tsf1.Hash()
 	blk, err = block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -189,7 +182,6 @@ func TestWrongNonce(t *testing.T) {
 	require.NoError(err)
 	blkhash = tsf1.Hash()
 	blk, err = block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -207,7 +199,6 @@ func TestWrongNonce(t *testing.T) {
 	require.NoError(err)
 	blkhash = tsf1.Hash()
 	blk, err = block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -225,7 +216,6 @@ func TestWrongNonce(t *testing.T) {
 
 	blkhash = tsf1.Hash()
 	blk, err = block.NewTestingBuilder().
-		SetChainID(cfg.Chain.ID).
 		SetHeight(3).
 		SetPrevBlockHash(blkhash).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -264,17 +254,15 @@ func TestWrongAddress(t *testing.T) {
 	selp, err := action.Sign(elp, ta.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 	blk1, err := block.NewTestingBuilder().
-		SetChainID(1).
 		SetHeight(3).
 		SetPrevBlockHash(hash.ZeroHash256).
 		SetTimeStamp(testutil.TimestampNow()).
 		AddActions(selp).
 		SignAndBuild(ta.Keyinfo["producer"].PubKey, ta.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
-	err = val.ValidateActionsOnly(
+	err = val.validateActionsOnly(
 		blk1.Actions,
 		blk1.PublicKey(),
-		blk1.ChainID(),
 		blk1.Height(),
 	)
 	require.Error(t, err)
@@ -290,7 +278,6 @@ func TestWrongAddress(t *testing.T) {
 	selp, err = action.Sign(elp, ta.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 	blk2, err := block.NewTestingBuilder().
-		SetChainID(1).
 		SetHeight(3).
 		SetPrevBlockHash(hash.ZeroHash256).
 		SetTimeStamp(testutil.TimestampNow()).
@@ -298,10 +285,9 @@ func TestWrongAddress(t *testing.T) {
 		SignAndBuild(ta.Keyinfo["producer"].PubKey, ta.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 
-	err = val.ValidateActionsOnly(
+	err = val.validateActionsOnly(
 		blk2.Actions,
 		blk2.PublicKey(),
-		blk2.ChainID(),
 		blk2.Height(),
 	)
 	require.Error(t, err)
@@ -317,17 +303,15 @@ func TestWrongAddress(t *testing.T) {
 	selp, err = action.Sign(elp, ta.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
 	blk3, err := block.NewTestingBuilder().
-		SetChainID(1).
 		SetHeight(3).
 		SetPrevBlockHash(hash.ZeroHash256).
 		SetTimeStamp(testutil.TimestampNow()).
 		AddActions(selp).
 		SignAndBuild(ta.Keyinfo["producer"].PubKey, ta.Keyinfo["producer"].PriKey)
 	require.NoError(t, err)
-	err = val.ValidateActionsOnly(
+	err = val.validateActionsOnly(
 		blk3.Actions,
 		blk3.PublicKey(),
-		blk3.ChainID(),
 		blk3.Height(),
 	)
 	require.Error(t, err)
@@ -350,10 +334,9 @@ func TestCoinbaseTransferValidation(t *testing.T) {
 	blk, err := chain.MintNewBlock(nil, pk, sk, addr, 0)
 	require.NoError(t, err)
 	validator := validator{}
-	require.NoError(t, validator.ValidateActionsOnly(
+	require.NoError(t, validator.validateActionsOnly(
 		blk.Actions,
 		blk.PublicKey(),
-		blk.ChainID(),
 		blk.Height(),
 	))
 }

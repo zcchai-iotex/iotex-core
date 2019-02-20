@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/iotexproject/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"golang.org/x/crypto/blake2b"
 
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/address"
@@ -23,7 +21,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/hash"
 	"github.com/iotexproject/iotex-core/pkg/keypair"
 	"github.com/iotexproject/iotex-core/pkg/log"
-	"github.com/iotexproject/iotex-core/proto"
+	"github.com/iotexproject/iotex-core/protogen/iotextypes"
 	"github.com/iotexproject/iotex-core/state/factory"
 )
 
@@ -39,46 +37,18 @@ type Block struct {
 	WorkingSet factory.WorkingSet
 }
 
-// ByteStream returns a byte stream of the block
-func (b *Block) ByteStream() []byte {
-	stream := b.Header.ByteStream()
-
-	// Add the stream of blockSig
-	stream = append(stream, b.Header.blockSig...)
-
-	for _, act := range b.Actions {
-		stream = append(stream, act.ByteStream()...)
-	}
-	return stream
+// ConvertToBlockHeaderPb converts BlockHeader to BlockHeader
+func (b *Block) ConvertToBlockHeaderPb() *iotextypes.BlockHeader {
+	return b.Header.BlockHeaderProto()
 }
 
-// ConvertToBlockHeaderPb converts BlockHeader to BlockHeaderPb
-func (b *Block) ConvertToBlockHeaderPb() *iproto.BlockHeaderPb {
-	pbHeader := iproto.BlockHeaderPb{}
-
-	pbHeader.Version = b.Header.version
-	pbHeader.ChainID = b.Header.chainID
-	pbHeader.Height = b.Header.height
-	pbHeader.Timestamp = &timestamp.Timestamp{
-		Seconds: b.Header.Timestamp(),
-	}
-	pbHeader.PrevBlockHash = b.Header.prevBlockHash[:]
-	pbHeader.TxRoot = b.Header.txRoot[:]
-	pbHeader.StateRoot = b.Header.stateRoot[:]
-	pbHeader.DeltaStateDigest = b.Header.deltaStateDigest[:]
-	pbHeader.ReceiptRoot = b.Header.receiptRoot[:]
-	pbHeader.Signature = b.Header.blockSig
-	pbHeader.Pubkey = keypair.PublicKeyToBytes(b.Header.pubkey)
-	return &pbHeader
-}
-
-// ConvertToBlockPb converts Block to BlockPb
-func (b *Block) ConvertToBlockPb() *iproto.BlockPb {
-	actions := []*iproto.ActionPb{}
+// ConvertToBlockPb converts Block to Block
+func (b *Block) ConvertToBlockPb() *iotextypes.Block {
+	actions := []*iotextypes.Action{}
 	for _, act := range b.Actions {
 		actions = append(actions, act.Proto())
 	}
-	return &iproto.BlockPb{
+	return &iotextypes.Block{
 		Header:  b.ConvertToBlockHeaderPb(),
 		Actions: actions,
 		Footer:  b.ConvertToBlockFooterPb(),
@@ -90,30 +60,28 @@ func (b *Block) Serialize() ([]byte, error) {
 	return proto.Marshal(b.ConvertToBlockPb())
 }
 
-// ConvertFromBlockHeaderPb converts BlockHeaderPb to BlockHeader
-func (b *Block) ConvertFromBlockHeaderPb(pbBlock *iproto.BlockPb) {
+// ConvertFromBlockHeaderPb converts BlockHeader to BlockHeader
+func (b *Block) ConvertFromBlockHeaderPb(pbBlock *iotextypes.Block) {
 	b.Header = Header{}
 
-	b.Header.version = pbBlock.GetHeader().GetVersion()
-	b.Header.chainID = pbBlock.GetHeader().GetChainID()
-	b.Header.height = pbBlock.GetHeader().GetHeight()
-	b.Header.timestamp = pbBlock.GetHeader().GetTimestamp().GetSeconds()
-	copy(b.Header.prevBlockHash[:], pbBlock.GetHeader().GetPrevBlockHash())
-	copy(b.Header.txRoot[:], pbBlock.GetHeader().GetTxRoot())
-	copy(b.Header.stateRoot[:], pbBlock.GetHeader().GetStateRoot())
-	copy(b.Header.deltaStateDigest[:], pbBlock.GetHeader().GetDeltaStateDigest())
-	copy(b.Header.receiptRoot[:], pbBlock.GetHeader().GetReceiptRoot())
+	b.Header.version = pbBlock.GetHeader().GetCore().GetVersion()
+	b.Header.height = pbBlock.GetHeader().GetCore().GetHeight()
+	b.Header.timestamp = pbBlock.GetHeader().GetCore().GetTimestamp().GetSeconds()
+	copy(b.Header.prevBlockHash[:], pbBlock.GetHeader().GetCore().GetPrevBlockHash())
+	copy(b.Header.txRoot[:], pbBlock.GetHeader().GetCore().GetTxRoot())
+	copy(b.Header.deltaStateDigest[:], pbBlock.GetHeader().GetCore().GetDeltaStateDigest())
+	copy(b.Header.receiptRoot[:], pbBlock.GetHeader().GetCore().GetReceiptRoot())
 	b.Header.blockSig = pbBlock.GetHeader().GetSignature()
 
-	pubKey, err := keypair.BytesToPublicKey(pbBlock.GetHeader().GetPubkey())
+	pubKey, err := keypair.BytesToPublicKey(pbBlock.GetHeader().GetProducerPubkey())
 	if err != nil {
 		log.L().Panic("Failed to unmarshal public key.", zap.Error(err))
 	}
 	b.Header.pubkey = pubKey
 }
 
-// ConvertFromBlockPb converts BlockPb to Block
-func (b *Block) ConvertFromBlockPb(pbBlock *iproto.BlockPb) error {
+// ConvertFromBlockPb converts Block to Block
+func (b *Block) ConvertFromBlockPb(pbBlock *iotextypes.Block) error {
 	b.ConvertFromBlockHeaderPb(pbBlock)
 
 	b.Actions = []action.SealedEnvelope{}
@@ -131,7 +99,7 @@ func (b *Block) ConvertFromBlockPb(pbBlock *iproto.BlockPb) error {
 
 // Deserialize parses the byte stream into a Block
 func (b *Block) Deserialize(buf []byte) error {
-	pbBlock := iproto.BlockPb{}
+	pbBlock := iotextypes.Block{}
 	if err := proto.Unmarshal(buf, &pbBlock); err != nil {
 		return err
 	}
@@ -155,21 +123,7 @@ func (b *Block) CalculateTxRoot() hash.Hash256 {
 }
 
 // HashBlock return the hash of this block (actually hash of block header)
-func (b *Block) HashBlock() hash.Hash256 {
-	return blake2b.Sum256(b.Header.ByteStream())
-}
-
-// VerifyStateRoot verifies the state root in header
-func (b *Block) VerifyStateRoot(root hash.Hash256) error {
-	if b.Header.stateRoot != root {
-		return errors.Errorf(
-			"state root hash does not match, expected = %x, actual = %x",
-			b.Header.stateRoot,
-			root,
-		)
-	}
-	return nil
-}
+func (b *Block) HashBlock() hash.Hash256 { return b.Header.HashHeader() }
 
 // VerifyDeltaStateDigest verifies the delta state digest in header
 func (b *Block) VerifyDeltaStateDigest(digest hash.Hash256) error {
@@ -185,12 +139,12 @@ func (b *Block) VerifyDeltaStateDigest(digest hash.Hash256) error {
 
 // VerifySignature verifies the signature saved in block header
 func (b *Block) VerifySignature() bool {
-	blkHash := b.HashBlock()
+	h := b.Header.HashHeaderCore()
 
 	if len(b.Header.blockSig) != action.SignatureLength {
 		return false
 	}
-	return crypto.VerifySignature(keypair.PublicKeyToBytes(b.Header.pubkey), blkHash[:],
+	return crypto.VerifySignature(keypair.PublicKeyToBytes(b.Header.pubkey), h[:],
 		b.Header.blockSig[:action.SignatureLength-1])
 }
 

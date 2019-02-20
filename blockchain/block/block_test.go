@@ -19,7 +19,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/hash"
 	"github.com/iotexproject/iotex-core/pkg/keypair"
 	"github.com/iotexproject/iotex-core/pkg/version"
-	iproto "github.com/iotexproject/iotex-core/proto"
+	"github.com/iotexproject/iotex-core/protogen/iotextypes"
 	ta "github.com/iotexproject/iotex-core/test/testaddress"
 	"github.com/iotexproject/iotex-core/testutil"
 )
@@ -75,7 +75,7 @@ func TestMerkle(t *testing.T) {
 		[]action.SealedEnvelope{selp0, selp1, selp2, selp3, selp4},
 	)
 	hash := block.CalculateTxRoot()
-	require.Equal("9eacfe53302a280fded08608fac9dd89c30fe42a2a066a218c60c03d050f60d7", hex.EncodeToString(hash[:]))
+	require.Equal("27708bd46b8ea8026db2eb764d19ae5c4213d20b035290f1e799d2298717887d", hex.EncodeToString(hash[:]))
 
 	t.Log("Merkle root match pass\n")
 }
@@ -83,44 +83,54 @@ func TestMerkle(t *testing.T) {
 func TestConvertFromBlockPb(t *testing.T) {
 	blk := Block{}
 	senderPubKey := ta.Keyinfo["producer"].PubKey
-	require.NoError(t, blk.ConvertFromBlockPb(&iproto.BlockPb{
-		Header: &iproto.BlockHeaderPb{
-			Version: version.ProtocolVersion,
-			Height:  123456789,
-			Pubkey:  keypair.PublicKeyToBytes(senderPubKey),
+	require.NoError(t, blk.ConvertFromBlockPb(&iotextypes.Block{
+		Header: &iotextypes.BlockHeader{
+			Core: &iotextypes.BlockHeaderCore{
+				Version: version.ProtocolVersion,
+				Height:  123456789,
+			},
+			ProducerPubkey: keypair.PublicKeyToBytes(senderPubKey),
 		},
-		Actions: []*iproto.ActionPb{
+		Actions: []*iotextypes.Action{
 			{
-				Action: &iproto.ActionPb_Transfer{
-					Transfer: &iproto.TransferPb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Transfer{
+						Transfer: &iotextypes.Transfer{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   101,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(senderPubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        101,
 			},
 			{
-				Action: &iproto.ActionPb_Transfer{
-					Transfer: &iproto.TransferPb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Transfer{
+						Transfer: &iotextypes.Transfer{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   102,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(senderPubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        102,
 			},
 			{
-				Action: &iproto.ActionPb_Vote{
-					Vote: &iproto.VotePb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Vote{
+						Vote: &iotextypes.Vote{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   103,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(senderPubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        103,
 			},
 			{
-				Action: &iproto.ActionPb_Vote{
-					Vote: &iproto.VotePb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Vote{
+						Vote: &iotextypes.Vote{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   104,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(senderPubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        104,
 			},
 		},
 	}))
@@ -147,6 +157,5 @@ func TestConvertFromBlockPb(t *testing.T) {
 	require.Equal(t, uint64(104), newblk.Actions[3].Nonce())
 
 	require.Equal(t, blk.Header.txRoot, blk.TxRoot())
-	require.Equal(t, blk.Header.stateRoot, blk.StateRoot())
 	require.Equal(t, blk.Header.receiptRoot, blk.ReceiptRoot())
 }

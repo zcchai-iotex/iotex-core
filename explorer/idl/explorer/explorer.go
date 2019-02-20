@@ -8,8 +8,8 @@ import (
 )
 
 const BarristerVersion string = "0.1.6"
-const BarristerChecksum string = "90a6e79cd2874d2f7decd0bb58d80471"
-const BarristerDateGenerated int64 = 1549330729958000000
+const BarristerChecksum string = "9a91a9518bf4888d8fcedc7e25cd3407"
+const BarristerDateGenerated int64 = 1550271368575000000
 
 type CoinStatistic struct {
 	Height     int64  `json:"height"`
@@ -34,10 +34,8 @@ type Block struct {
 	Executions       int64          `json:"executions"`
 	GenerateBy       BlockGenerator `json:"generateBy"`
 	Amount           string         `json:"amount"`
-	Forged           int64          `json:"forged"`
 	Size             int64          `json:"size"`
 	TxRoot           string         `json:"txRoot"`
-	StateRoot        string         `json:"stateRoot"`
 	DeltaStateDigest string         `json:"deltaStateDigest"`
 }
 
@@ -83,7 +81,6 @@ type Log struct {
 	Data        string   `json:"data"`
 	BlockNumber int64    `json:"blockNumber"`
 	TxnHash     string   `json:"txnHash"`
-	BlockHash   string   `json:"blockHash"`
 	Index       int64    `json:"index"`
 }
 
@@ -223,10 +220,11 @@ type SendSmartContractResponse struct {
 }
 
 type GetBlkOrActResponse struct {
-	Block     *Block     `json:"block,omitempty"`
-	Transfer  *Transfer  `json:"transfer,omitempty"`
-	Vote      *Vote      `json:"vote,omitempty"`
-	Execution *Execution `json:"execution,omitempty"`
+	Block     *Block          `json:"block,omitempty"`
+	Transfer  *Transfer       `json:"transfer,omitempty"`
+	Vote      *Vote           `json:"vote,omitempty"`
+	Execution *Execution      `json:"execution,omitempty"`
+	Address   *AddressDetails `json:"address,omitempty"`
 }
 
 type CreateDepositRequest struct {
@@ -1401,13 +1399,6 @@ var IdlJsonRaw = `[
                 "comment": ""
             },
             {
-                "name": "forged",
-                "type": "int",
-                "optional": false,
-                "is_array": false,
-                "comment": ""
-            },
-            {
                 "name": "size",
                 "type": "int",
                 "optional": false,
@@ -1416,13 +1407,6 @@ var IdlJsonRaw = `[
             },
             {
                 "name": "txRoot",
-                "type": "string",
-                "optional": false,
-                "is_array": false,
-                "comment": ""
-            },
-            {
-                "name": "stateRoot",
                 "type": "string",
                 "optional": false,
                 "is_array": false,
@@ -1717,13 +1701,6 @@ var IdlJsonRaw = `[
             },
             {
                 "name": "txnHash",
-                "type": "string",
-                "optional": false,
-                "is_array": false,
-                "comment": ""
-            },
-            {
-                "name": "blockHash",
                 "type": "string",
                 "optional": false,
                 "is_array": false,
@@ -4185,7 +4162,7 @@ var IdlJsonRaw = `[
         "values": null,
         "functions": null,
         "barrister_version": "0.1.6",
-        "date_generated": 1549330729958,
-        "checksum": "90a6e79cd2874d2f7decd0bb58d80471"
+        "date_generated": 1550271368575,
+        "checksum": "9a91a9518bf4888d8fcedc7e25cd3407"
     }
 ]`

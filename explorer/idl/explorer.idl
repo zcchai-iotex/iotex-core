@@ -38,10 +38,8 @@ struct Block {
     executions int
     generateBy BlockGenerator
     amount string
-    forged int
     size int
     txRoot string
-    stateRoot string
     deltaStateDigest string
 }
 
@@ -87,7 +85,6 @@ struct Log {
     data string
     blockNumber int
     txnHash string
-    blockHash string
     index int
 }
 
@@ -231,6 +228,7 @@ struct GetBlkOrActResponse {
     transfer Transfer [optional]
     vote Vote [optional]
     execution Execution [optional]
+    address AddressDetails [optional]
 }
 
 struct CreateDepositRequest {

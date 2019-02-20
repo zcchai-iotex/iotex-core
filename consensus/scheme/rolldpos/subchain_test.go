@@ -18,7 +18,7 @@ import (
 	explorerapi "github.com/iotexproject/iotex-core/explorer/idl/explorer"
 	"github.com/iotexproject/iotex-core/pkg/keypair"
 	"github.com/iotexproject/iotex-core/pkg/version"
-	"github.com/iotexproject/iotex-core/proto"
+	"github.com/iotexproject/iotex-core/protogen/iotextypes"
 	"github.com/iotexproject/iotex-core/test/mock/mock_explorer"
 	"github.com/iotexproject/iotex-core/test/testaddress"
 )
@@ -34,54 +34,62 @@ func TestPutBlockToParentChain(t *testing.T) {
 	priKey := testaddress.Keyinfo["producer"].PriKey
 	subAddr := testaddress.Addrinfo["echo"].String()
 	blk := block.Block{}
-	blkpb := &iproto.BlockPb{
-		Header: &iproto.BlockHeaderPb{
-			Version: version.ProtocolVersion,
-			Height:  123456789,
-			Pubkey:  keypair.PublicKeyToBytes(pubKey),
+	blkpb := &iotextypes.Block{
+		Header: &iotextypes.BlockHeader{
+			Core: &iotextypes.BlockHeaderCore{
+				Version: version.ProtocolVersion,
+				Height:  123456789,
+			},
+			ProducerPubkey: keypair.PublicKeyToBytes(pubKey),
 		},
-		Actions: []*iproto.ActionPb{
+		Actions: []*iotextypes.Action{
 			{
-				Action: &iproto.ActionPb_Transfer{
-					Transfer: &iproto.TransferPb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Transfer{
+						Transfer: &iotextypes.Transfer{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   101,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(pubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        101,
 			},
 			{
-				Action: &iproto.ActionPb_Transfer{
-					Transfer: &iproto.TransferPb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Transfer{
+						Transfer: &iotextypes.Transfer{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   102,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(pubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        102,
 			},
 			{
-				Action: &iproto.ActionPb_Vote{
-					Vote: &iproto.VotePb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Vote{
+						Vote: &iotextypes.Vote{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   103,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(pubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        103,
 			},
 			{
-				Action: &iproto.ActionPb_Vote{
-					Vote: &iproto.VotePb{},
+				Core: &iotextypes.ActionCore{
+					Action: &iotextypes.ActionCore_Vote{
+						Vote: &iotextypes.Vote{},
+					},
+					Version: version.ProtocolVersion,
+					Nonce:   104,
 				},
 				SenderPubKey: keypair.PublicKeyToBytes(pubKey),
-				Version:      version.ProtocolVersion,
-				Nonce:        104,
 			},
 		},
 	}
 	require.NoError(t, blk.ConvertFromBlockPb(blkpb))
 	txRoot := blk.CalculateTxRoot()
-	blkpb.Header.TxRoot = txRoot[:]
-	blkpb.Header.StateRoot = []byte("state root")
+	blkpb.Header.Core.TxRoot = txRoot[:]
 	blk = block.Block{}
 	require.NoError(t, blk.ConvertFromBlockPb(blkpb))
-	stateRoot := blk.StateRoot()
 
 	req := explorerapi.PutSubChainBlockRequest{
 		Version:         1,
@@ -93,10 +101,6 @@ func TestPutBlockToParentChain(t *testing.T) {
 		SubChainAddress: subAddr,
 		Height:          123456789,
 		Roots: []explorerapi.PutSubChainBlockMerkelRoot{
-			{
-				Name:  "state",
-				Value: hex.EncodeToString(stateRoot[:]),
-			},
 			{
 				Name:  "tx",
 				Value: hex.EncodeToString(txRoot[:]),

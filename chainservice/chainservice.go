@@ -19,6 +19,7 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/actpool"
 	"github.com/iotexproject/iotex-core/address"
+	"github.com/iotexproject/iotex-core/api"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/blockchain/block"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
@@ -32,7 +33,8 @@ import (
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/keypair"
 	"github.com/iotexproject/iotex-core/pkg/log"
-	iproto "github.com/iotexproject/iotex-core/proto"
+	"github.com/iotexproject/iotex-core/protogen/iotexrpc"
+	"github.com/iotexproject/iotex-core/protogen/iotextypes"
 )
 
 // ChainService is a blockchain service with all blockchain components.
@@ -42,6 +44,7 @@ type ChainService struct {
 	consensus    consensus.Consensus
 	chain        blockchain.Blockchain
 	explorer     *explorer.Server
+	api          *api.Server
 	indexBuilder *blockchain.IndexBuilder
 	indexservice *indexservice.Server
 	registry     *protocol.Registry
@@ -194,6 +197,24 @@ func New(
 		}
 	}
 
+	var apiSvr *api.Server
+	if cfg.API.Enabled {
+		apiSvr, err = api.NewServer(
+			cfg.API,
+			chain,
+			dispatcher,
+			actPool,
+			idx,
+			api.WithBroadcastOutbound(func(ctx context.Context, chainID uint32, msg proto.Message) error {
+				ctx = p2p.WitContext(ctx, p2p.Context{ChainID: chainID})
+				return p2pAgent.BroadcastOutbound(ctx, msg)
+			}),
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &ChainService{
 		actpool:      actPool,
 		chain:        chain,
@@ -202,6 +223,7 @@ func New(
 		indexservice: idx,
 		indexBuilder: indexBuilder,
 		explorer:     exp,
+		api:          apiSvr,
 		registry:     &registry,
 	}, nil
 }
@@ -227,6 +249,11 @@ func (cs *ChainService) Start(ctx context.Context) error {
 			return errors.Wrap(err, "error when starting explorer")
 		}
 	}
+	if cs.api != nil {
+		if err := cs.api.Start(); err != nil {
+			return errors.Wrap(err, "err when starting API server")
+		}
+	}
 	if cs.indexBuilder != nil {
 		if err := cs.indexBuilder.Start(ctx); err != nil {
 			return errors.Wrap(err, "error when starting index builder")
@@ -247,6 +274,11 @@ func (cs *ChainService) Stop(ctx context.Context) error {
 			return errors.Wrap(err, "error when stopping explorer")
 		}
 	}
+	if cs.api != nil {
+		if err := cs.api.Stop(); err != nil {
+			return errors.Wrap(err, "error when stopping API server")
+		}
+	}
 	if cs.indexservice != nil {
 		if err := cs.indexservice.Stop(ctx); err != nil {
 			return errors.Wrap(err, "error when stopping indexservice")
@@ -265,7 +297,7 @@ func (cs *ChainService) Stop(ctx context.Context) error {
 }
 
 // HandleAction handles incoming action request.
-func (cs *ChainService) HandleAction(_ context.Context, actPb *iproto.ActionPb) error {
+func (cs *ChainService) HandleAction(_ context.Context, actPb *iotextypes.Action) error {
 	var act action.SealedEnvelope
 	if err := act.LoadProto(actPb); err != nil {
 		return err
@@ -286,7 +318,7 @@ func (cs *ChainService) HandleAction(_ context.Context, actPb *iproto.ActionPb) 
 }
 
 // HandleBlock handles incoming block request.
-func (cs *ChainService) HandleBlock(ctx context.Context, pbBlock *iproto.BlockPb) error {
+func (cs *ChainService) HandleBlock(ctx context.Context, pbBlock *iotextypes.Block) error {
 	blk := &block.Block{}
 	if err := blk.ConvertFromBlockPb(pbBlock); err != nil {
 		return err
@@ -295,7 +327,7 @@ func (cs *ChainService) HandleBlock(ctx context.Context, pbBlock *iproto.BlockPb
 }
 
 // HandleBlockSync handles incoming block sync request.
-func (cs *ChainService) HandleBlockSync(ctx context.Context, pbBlock *iproto.BlockPb) error {
+func (cs *ChainService) HandleBlockSync(ctx context.Context, pbBlock *iotextypes.Block) error {
 	blk := &block.Block{}
 	if err := blk.ConvertFromBlockPb(pbBlock); err != nil {
 		return err
@@ -304,12 +336,12 @@ func (cs *ChainService) HandleBlockSync(ctx context.Context, pbBlock *iproto.Blo
 }
 
 // HandleSyncRequest handles incoming sync request.
-func (cs *ChainService) HandleSyncRequest(ctx context.Context, peer peerstore.PeerInfo, sync *iproto.BlockSync) error {
+func (cs *ChainService) HandleSyncRequest(ctx context.Context, peer peerstore.PeerInfo, sync *iotexrpc.BlockSync) error {
 	return cs.blocksync.ProcessSyncRequest(ctx, peer, sync)
 }
 
 // HandleConsensusMsg handles incoming consensus message.
-func (cs *ChainService) HandleConsensusMsg(msg *iproto.ConsensusPb) error {
+func (cs *ChainService) HandleConsensusMsg(msg *iotexrpc.Consensus) error {
 	return cs.consensus.HandleConsensusMsg(msg)
 }
 
