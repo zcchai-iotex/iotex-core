@@ -305,9 +305,6 @@ func registerDefaultProtocols(cs *chainservice.ChainService, genesisConfig genes
 	if err := cs.RegisterProtocol(execution.ProtocolID, executionProtocol); err != nil {
 		return err
 	}
-	rewardingProtocol := rewarding.NewProtocol()
-	if err := cs.RegisterProtocol(rewarding.ProtocolID, rewardingProtocol); err != nil {
-		return err
-	}
-	return nil
+	rewardingProtocol := rewarding.NewProtocol(cs.Blockchain(), genesisConfig.NumDelegates, genesisConfig.NumSubEpochs)
+	return cs.RegisterProtocol(rewarding.ProtocolID, rewardingProtocol)
 }

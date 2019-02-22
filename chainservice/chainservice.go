@@ -110,7 +110,7 @@ func New(
 		}
 	}
 	registry := protocol.Registry{}
-	chainOpts = append(chainOpts, blockchain.GenesisOption(ops.genesisConfig), blockchain.RegistryOption(&registry))
+	chainOpts = append(chainOpts, blockchain.RegistryOption(&registry))
 
 	// create Blockchain
 	chain := blockchain.NewBlockchain(cfg, chainOpts...)
@@ -205,6 +205,7 @@ func New(
 			dispatcher,
 			actPool,
 			idx,
+			&registry,
 			api.WithBroadcastOutbound(func(ctx context.Context, chainID uint32, msg proto.Message) error {
 				ctx = p2p.WitContext(ctx, p2p.Context{ChainID: chainID})
 				return p2pAgent.BroadcastOutbound(ctx, msg)

@@ -14,7 +14,7 @@ import (
 
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
-	"github.com/iotexproject/iotex-core/action/protocol/account/util"
+	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/address"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/pkg/hash"
@@ -105,6 +105,11 @@ func (p *Protocol) Validate(ctx context.Context, act action.Action) error {
 	return nil
 }
 
+// ReadState read the state on blockchain via protocol
+func (p *Protocol) ReadState(context.Context, protocol.StateManager, []byte, ...[]byte) ([]byte, error) {
+	return nil, protocol.ErrUnimplemented
+}
+
 func (p *Protocol) account(sender string, sm protocol.StateManager) (*state.Account, error) {
 	if sm == nil {
 		return p.sf.AccountState(sender)
@@ -114,7 +119,7 @@ func (p *Protocol) account(sender string, sm protocol.StateManager) (*state.Acco
 		return nil, errors.Wrap(err, "failed to convert address to public key hash")
 	}
 	addrHash := byteutil.BytesTo20B(addr.Bytes())
-	return util.LoadAccount(sm, addrHash)
+	return accountutil.LoadAccount(sm, addrHash)
 }
 
 func (p *Protocol) accountWithEnoughBalance(

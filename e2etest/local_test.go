@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/golang/protobuf/proto"
-	"github.com/iotexproject/go-ethereum/crypto"
 	"github.com/libp2p/go-libp2p-peerstore"
 	"github.com/stretchr/testify/require"
 
@@ -50,7 +50,6 @@ func TestLocalCommit(t *testing.T) {
 
 	cfg, err := newTestConfig()
 	require.Nil(err)
-	genesisCfg := genesis.Default
 
 	// create server
 	ctx := context.Background()
@@ -154,16 +153,15 @@ func TestLocalCommit(t *testing.T) {
 	require.NoError(copyDB(testTriePath, testTriePath2))
 	require.NoError(copyDB(testDBPath, testDBPath2))
 	registry := protocol.Registry{}
-	rewardingProtocol := rewarding.NewProtocol()
-	registry.Register(rewarding.ProtocolID, rewardingProtocol)
 	chain := blockchain.NewBlockchain(
 		cfg,
 		blockchain.DefaultStateFactoryOption(),
 		blockchain.BoltDBDaoOption(),
-		blockchain.GenesisOption(genesisCfg),
 		blockchain.RegistryOption(&registry),
 	)
-	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain, genesisCfg.Blockchain.ActionGasLimit))
+	rewardingProtocol := rewarding.NewProtocol(chain, genesis.Default.NumDelegates, genesis.Default.NumSubEpochs)
+	registry.Register(rewarding.ProtocolID, rewardingProtocol)
+	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain, genesis.Default.ActionGasLimit))
 	chain.Validator().AddActionValidators(account.NewProtocol())
 	chain.GetFactory().AddActionHandlers(account.NewProtocol(), vote.NewProtocol(chain), rewardingProtocol)
 	require.NoError(chain.Start(ctx))
@@ -496,7 +494,6 @@ func TestVoteLocalCommit(t *testing.T) {
 	cfg, err := newTestConfig()
 	cfg.Chain.NumCandidates = 2
 	require.Nil(err)
-	genesisCfg := genesis.Default
 
 	// create node
 	ctx := context.Background()
@@ -537,16 +534,15 @@ func TestVoteLocalCommit(t *testing.T) {
 	require.NoError(copyDB(testTriePath, testTriePath2))
 	require.NoError(copyDB(testDBPath, testDBPath2))
 	registry := protocol.Registry{}
-	rewardingProtocol := rewarding.NewProtocol()
-	registry.Register(rewarding.ProtocolID, rewardingProtocol)
 	chain := blockchain.NewBlockchain(
 		cfg,
 		blockchain.DefaultStateFactoryOption(),
 		blockchain.BoltDBDaoOption(),
-		blockchain.GenesisOption(genesisCfg),
 		blockchain.RegistryOption(&registry),
 	)
-	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain, genesisCfg.Blockchain.ActionGasLimit))
+	rewardingProtocol := rewarding.NewProtocol(chain, genesis.Default.NumDelegates, genesis.Default.NumSubEpochs)
+	registry.Register(rewarding.ProtocolID, rewardingProtocol)
+	chain.Validator().AddActionEnvelopeValidators(protocol.NewGenericValidator(chain, genesis.Default.ActionGasLimit))
 	chain.Validator().AddActionValidators(account.NewProtocol(),
 		vote.NewProtocol(chain))
 	require.NotNil(chain)
