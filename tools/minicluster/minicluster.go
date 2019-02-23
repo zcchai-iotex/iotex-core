@@ -30,6 +30,7 @@ import (
 	"github.com/iotexproject/iotex-core/server/itx"
 	"github.com/iotexproject/iotex-core/testutil"
 	"github.com/iotexproject/iotex-core/tools/util"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -123,6 +124,7 @@ func main() {
 	if err != nil {
 		log.L().Error("Failed to connect to API server.")
 	}
+
 	client := iotexapi.NewAPIServiceClient(conn)
 
 	counter, err := util.InitCounter(client, chainAddrs)

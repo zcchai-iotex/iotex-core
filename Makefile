@@ -109,6 +109,7 @@ dev-deps:
 	$(ECHO_V)go get -u github.com/axw/gocov/gocov
 	$(ECHO_V)go get -u gopkg.in/matm/v1/gocov-html
 	$(ECHO_V)go get -u github.com/go-playground/overalls
+	$(ECHO_V)go get -u github.com/karalabe/hid
 
 .PHONY: clean
 clean:

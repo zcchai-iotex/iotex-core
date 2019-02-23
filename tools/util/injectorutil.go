@@ -90,6 +90,7 @@ func InitCounter(client iotexapi.APIServiceClient, addrKeys []*AddressKey) (map[
 				return err
 			}
 			counter[addr] = acctDetails.GetAccountMeta().PendingNonce
+
 			return nil
 		}, backoff.NewExponentialBackOff())
 		if err != nil {
@@ -140,6 +141,7 @@ loop:
 						return err
 					}
 					counter[addr] = acctDetails.GetAccountMeta().PendingNonce
+
 					return nil
 				}, backoff.NewExponentialBackOff())
 				if err != nil {
@@ -156,6 +158,7 @@ loop:
 						return err
 					}
 					counter[addr] = acctDetails.GetAccountMeta().PendingNonce
+
 					return nil
 				}, backoff.NewExponentialBackOff())
 				if err != nil {
