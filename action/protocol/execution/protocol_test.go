@@ -149,7 +149,7 @@ func (sct *smartContractTest) prepareBlockchain(
 			Producer: testaddress.Addrinfo["producer"],
 			GasLimit: &gasLimit,
 		})
-	_, _, err = ws.RunActions(ctx, 0, nil)
+	_, err = ws.RunActions(ctx, 0, nil)
 	r.NoError(err)
 	r.NoError(sf.Commit(ws))
 
@@ -245,7 +245,7 @@ func TestProtocol_Handle(t *testing.T) {
 				Producer: testaddress.Addrinfo["producer"],
 				GasLimit: &gasLimit,
 			})
-		_, _, err = ws.RunActions(ctx, 0, nil)
+		_, err = ws.RunActions(ctx, 0, nil)
 		require.NoError(err)
 		require.NoError(sf.Commit(ws))
 
@@ -447,7 +447,7 @@ func TestProtocol_Handle(t *testing.T) {
 				Producer: testaddress.Addrinfo["producer"],
 				GasLimit: &gasLimit,
 			})
-		_, _, err = ws.RunActions(ctx, 0, nil)
+		_, err = ws.RunActions(ctx, 0, nil)
 		require.NoError(err)
 		require.NoError(sf.Commit(ws))
 
@@ -623,7 +623,7 @@ func TestProtocol_Handle(t *testing.T) {
 				Producer: testaddress.Addrinfo["producer"],
 				GasLimit: &gasLimit,
 			})
-		_, _, err = ws.RunActions(ctx, 0, nil)
+		_, err = ws.RunActions(ctx, 0, nil)
 		require.NoError(err)
 		require.NoError(sf.Commit(ws))
 
