@@ -352,15 +352,21 @@ func (dao *blockDAO) putBlock(blk *block.Block) error {
 
 	height := byteutil.Uint64ToBytes(blk.Height())
 	hash := blk.HashBlock()
+	timer := dao.timerFactory.NewTimer("serialize_header")
 	serHeader, err := blk.Header.Serialize()
+	timer.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to serialize block header")
 	}
+	timer = dao.timerFactory.NewTimer("serialize_body")
 	serBody, err := blk.Body.Serialize()
+	timer.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to serialize block body")
 	}
+	timer = dao.timerFactory.NewTimer("serialize_footer")
 	serFooter, err := blk.Footer.Serialize()
+	timer.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to serialize block footer")
 	}
@@ -404,12 +410,21 @@ func (dao *blockDAO) putBlock(blk *block.Block) error {
 	}
 
 	if !dao.writeIndex {
-		return dao.kvstore.Commit(batch)
-	}
-	if err := indexBlock(dao.kvstore, blk, batch); err != nil {
+		timer = dao.timerFactory.NewTimer("commit_block")
+		err := dao.kvstore.Commit(batch)
+		timer.End()
 		return err
 	}
-	return dao.kvstore.Commit(batch)
+	timer = dao.timerFactory.NewTimer("index_block")
+	err = indexBlock(dao.kvstore, blk, batch)
+	timer.End()
+	if err != nil {
+		return err
+	}
+	timer = dao.timerFactory.NewTimer("commit_block")
+	err = dao.kvstore.Commit(batch)
+	timer.End()
+	return err
 }
 
 // putReceipts store receipt into db
