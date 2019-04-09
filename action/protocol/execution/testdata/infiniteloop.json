@@ -26,7 +26,8 @@
         "expectedBalances": [{
             "account": "io1mflp9m6hcgm2qcghchsdqj3z3eccrnekx9p0ms",
             "rawBalance": "9999999999999768135"
-        }]
+        }],
+        "expectedLogs": [{}]
     }, {
         "rawPrivateKey": "cfa6ef757dee2e50351620dca002d32b9c090cfda55fb81f37f1d26b273743f1",
         "rawByteCode": "c2bc2efc0000000000000000000000000000000000000000000000000000000000000001",
@@ -34,12 +35,9 @@
         "rawGasLimit": 1000000,
         "rawGasPrice": "1",
         "rawExpectedGasConsumed": 15709,
-        "hasReturnValue": true,
+        "readOnly": true,
         "rawReturnValue": "0000000000000000000000000000000000000000000000000000000000001f40",
-        "expectedBalances": [{
-            "account": "io1mflp9m6hcgm2qcghchsdqj3z3eccrnekx9p0ms",
-            "rawBalance": "9999999999999752426"
-        }]
+        "expectedLogs": [{}]
     }, {
         "rawPrivateKey": "cfa6ef757dee2e50351620dca002d32b9c090cfda55fb81f37f1d26b273743f1",
         "rawByteCode": "5bec9e67",
@@ -50,7 +48,7 @@
         "failed": true,
         "expectedBalances": [{
             "account": "io1mflp9m6hcgm2qcghchsdqj3z3eccrnekx9p0ms",
-            "rawBalance": "9999999999994752426"
+            "rawBalance": "9999999999994778137"
         }]
     }]
 }

@@ -26,7 +26,7 @@ import (
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/account"
-	"github.com/iotexproject/iotex-core/action/protocol/account/util"
+	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
 	"github.com/iotexproject/iotex-core/action/protocol/vote"
@@ -58,19 +58,28 @@ func (eb *ExpectedBalance) Balance() *big.Int {
 	return balance
 }
 
+type Log struct {
+	Topics []string `json:"topics"`
+	Data   string   `json:"data"`
+}
+
 type ExecutionConfig struct {
-	Comment                string            `json:"comment"`
-	ContractIndex          int               `json:"contractIndex"`
-	RawPrivateKey          string            `json:"rawPrivateKey"`
-	RawByteCode            string            `json:"rawByteCode"`
-	RawAmount              string            `json:"rawAmount"`
-	RawGasLimit            uint              `json:"rawGasLimit"`
-	RawGasPrice            string            `json:"rawGasPrice"`
-	Failed                 bool              `json:"failed"`
-	HasReturnValue         bool              `json:"hasReturnValue"`
-	RawReturnValue         string            `json:"rawReturnValue"`
-	RawExpectedGasConsumed uint              `json:"rawExpectedGasConsumed"`
-	ExpectedBalances       []ExpectedBalance `json:"expectedBalances"`
+	Comment                 string            `json:"comment"`
+	ContractIndex           int               `json:"contractIndex"`
+	AppendContractAddress   bool              `json:"appendContractAddress"`
+	ContractIndexToAppend   int               `json:"contractIndexToAppend"`
+	ContractAddressToAppend string            `json:"contractAddressToAppend"`
+	ReadOnly                bool              `json:"readOnly"`
+	RawPrivateKey           string            `json:"rawPrivateKey"`
+	RawByteCode             string            `json:"rawByteCode"`
+	RawAmount               string            `json:"rawAmount"`
+	RawGasLimit             uint              `json:"rawGasLimit"`
+	RawGasPrice             string            `json:"rawGasPrice"`
+	Failed                  bool              `json:"failed"`
+	RawReturnValue          string            `json:"rawReturnValue"`
+	RawExpectedGasConsumed  uint              `json:"rawExpectedGasConsumed"`
+	ExpectedBalances        []ExpectedBalance `json:"expectedBalances"`
+	ExpectedLogs            []Log             `json:"expectedLogs"`
 }
 
 func (cfg *ExecutionConfig) PrivateKey() keypair.PrivateKey {
@@ -108,6 +117,19 @@ func (cfg *ExecutionConfig) ByteCode() []byte {
 			zap.String("byteCode", cfg.RawByteCode),
 			zap.Error(err),
 		)
+	}
+	if cfg.AppendContractAddress {
+		addr, err := address.FromString(cfg.ContractAddressToAppend)
+		if err != nil {
+			log.L().Panic(
+				"invalid contract address to append",
+				zap.String("contractAddressToAppend", cfg.ContractAddressToAppend),
+				zap.Error(err),
+			)
+		}
+		ba := addr.Bytes()
+		ba = append(make([]byte, 12), ba...)
+		byteCode = append(byteCode, ba...)
 	}
 
 	return byteCode
@@ -174,11 +196,11 @@ func runExecution(
 	bc blockchain.Blockchain,
 	ecfg *ExecutionConfig,
 	contractAddr string,
-) (*action.Receipt, error) {
+) ([]byte, *action.Receipt, error) {
 	log.S().Info(ecfg.Comment)
 	nonce, err := bc.Nonce(ecfg.Executor().String())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	exec, err := action.NewExecution(
 		contractAddr,
@@ -189,7 +211,14 @@ func runExecution(
 		ecfg.ByteCode(),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if ecfg.ReadOnly { // read
+		addr, err := address.FromBytes(ecfg.PrivateKey().PublicKey().Hash())
+		if err != nil {
+			return nil, nil, err
+		}
+		return bc.ExecuteContractRead(addr, exec)
 	}
 	builder := &action.EnvelopeBuilder{}
 	elp := builder.SetAction(exec).
@@ -199,7 +228,7 @@ func runExecution(
 		Build()
 	selp, err := action.Sign(elp, ecfg.PrivateKey())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	actionMap := make(map[string][]action.SealedEnvelope)
 	actionMap[ecfg.Executor().String()] = []action.SealedEnvelope{selp}
@@ -208,16 +237,17 @@ func runExecution(
 		testutil.TimestampNow(),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := bc.ValidateBlock(blk); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := bc.CommitBlock(blk); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	receipt, err := bc.GetReceiptByActionHash(exec.Hash())
 
-	return bc.GetReceiptByActionHash(exec.Hash())
+	return nil, receipt, err
 }
 
 func (sct *SmartContractTest) prepareBlockchain(
@@ -269,7 +299,7 @@ func (sct *SmartContractTest) deployContracts(
 	r *require.Assertions,
 ) (contractAddresses []string) {
 	for i, contract := range sct.Deployments {
-		receipt, err := runExecution(bc, &contract, action.EmptyAddress)
+		_, receipt, err := runExecution(bc, &contract, action.EmptyAddress)
 		r.NoError(err)
 		r.NotNil(receipt)
 		if sct.Deployments[i].Failed {
@@ -307,7 +337,10 @@ func (sct *SmartContractTest) run(r *require.Assertions) {
 	// run executions
 	for _, exec := range sct.Executions {
 		contractAddr := contractAddresses[exec.ContractIndex]
-		receipt, err := runExecution(bc, &exec, contractAddr)
+		if exec.AppendContractAddress {
+			exec.ContractAddressToAppend = contractAddresses[exec.ContractIndexToAppend]
+		}
+		retval, receipt, err := runExecution(bc, &exec, contractAddr)
 		r.NoError(err)
 		r.NotNil(receipt)
 		if exec.Failed {
@@ -315,11 +348,17 @@ func (sct *SmartContractTest) run(r *require.Assertions) {
 		} else {
 			r.Equal(action.SuccessReceiptStatus, receipt.Status)
 		}
-		if exec.HasReturnValue {
-			r.Equal(exec.ExpectedReturnValue(), receipt.ReturnValue)
-		}
 		if exec.ExpectedGasConsumed() != 0 {
 			r.Equal(exec.ExpectedGasConsumed(), receipt.GasConsumed)
+		}
+		if exec.ReadOnly {
+			expected := exec.ExpectedReturnValue()
+			if len(expected) == 0 {
+				r.Equal(0, len(retval))
+			} else {
+				r.Equal(expected, retval)
+			}
+			return
 		}
 		for _, expectedBalance := range exec.ExpectedBalances {
 			account := expectedBalance.Account
@@ -330,6 +369,8 @@ func (sct *SmartContractTest) run(r *require.Assertions) {
 			r.NoError(err)
 			r.Equal(0, balance.Cmp(expectedBalance.Balance()))
 		}
+		r.Equal(len(exec.ExpectedLogs), len(receipt.Logs))
+		// TODO: check value of logs
 	}
 }
 
@@ -585,6 +626,14 @@ func TestProtocol_Handle(t *testing.T) {
 	// public-length
 	t.Run("PublicLength", func(t *testing.T) {
 		NewSmartContractTest(t, "testdata/public-length.json")
+	})
+	// public-mapping
+	t.Run("PublicMapping", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/public-mapping.json")
+	})
+	// multisend
+	t.Run("Multisend", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/multisend.json")
 	})
 }
 
