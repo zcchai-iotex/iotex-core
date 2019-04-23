@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"syscall"
 
 	"github.com/golang/protobuf/proto"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/cli/ioctl/cmd/account"
+	"github.com/iotexproject/iotex-core/cli/ioctl/cmd/config"
 	"github.com/iotexproject/iotex-core/cli/ioctl/util"
 	"github.com/iotexproject/iotex-core/pkg/hash"
 	"github.com/iotexproject/iotex-core/pkg/log"
@@ -49,24 +51,46 @@ func init() {
 	ActionCmd.AddCommand(actionDeployCmd)
 	ActionCmd.AddCommand(actionInvokeCmd)
 	ActionCmd.AddCommand(actionClaimCmd)
-	setActionFlags(actionTransferCmd, actionDeployCmd, actionInvokeCmd, actionClaimCmd)
+	ActionCmd.AddCommand(actionDepositCmd)
+	ActionCmd.PersistentFlags().StringVar(&config.ReadConfig.Endpoint, "endpoint",
+		config.ReadConfig.Endpoint, "set endpoint for once")
+	ActionCmd.PersistentFlags().BoolVar(&config.Insecure, "insecure", config.Insecure,
+		"insecure connection for once")
+	setActionFlags(actionTransferCmd, actionDeployCmd, actionInvokeCmd, actionClaimCmd,
+		actionDepositCmd)
 }
 
 func setActionFlags(cmds ...*cobra.Command) {
 	for _, cmd := range cmds {
 		cmd.Flags().Uint64VarP(&gasLimit, "gas-limit", "l", 0, "set gas limit")
-		cmd.Flags().StringVarP(&gasPrice, "gas-price", "p", "",
+		cmd.Flags().StringVarP(&gasPrice, "gas-price", "p", "1",
 			"set gas price (unit: 10^(-6)Iotx)")
 		cmd.Flags().StringVarP(&signer, "signer", "s", "", "choose a signing account")
 		cmd.Flags().Uint64VarP(&nonce, "nonce", "n", 0, "set nonce")
-		cmd.MarkFlagRequired("gas-limit")
-		cmd.MarkFlagRequired("gas-price")
 		cmd.MarkFlagRequired("signer")
 		if cmd == actionDeployCmd || cmd == actionInvokeCmd {
 			cmd.Flags().BytesHexVarP(&bytecode, "bytecode", "b", nil, "set the byte code")
+			cmd.MarkFlagRequired("gas-limit")
 			cmd.MarkFlagRequired("bytecode")
 		}
 	}
+}
+
+// GetGasPrice gets the suggest gas price
+func GetGasPrice() (*big.Int, error) {
+	conn, err := util.ConnectToEndpoint(config.ReadConfig.SecureConnect && !config.Insecure)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	cli := iotexapi.NewAPIServiceClient(conn)
+	ctx := context.Background()
+	request := &iotexapi.SuggestGasPriceRequest{}
+	response, err := cli.SuggestGasPrice(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return new(big.Int).SetUint64(response.GasPrice), nil
 }
 
 func sendAction(elp action.Envelope) (string, error) {
@@ -104,7 +128,7 @@ func sendAction(elp action.Envelope) (string, error) {
 	fmt.Println()
 
 	request := &iotexapi.SendActionRequest{Action: selp}
-	conn, err := util.ConnectToEndpoint()
+	conn, err := util.ConnectToEndpoint(config.ReadConfig.SecureConnect && !config.Insecure)
 	if err != nil {
 		return "", err
 	}

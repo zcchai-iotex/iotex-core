@@ -12,10 +12,10 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
+	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
-	"github.com/iotexproject/iotex-core/address"
 	"github.com/iotexproject/iotex-core/pkg/hash"
 	"github.com/iotexproject/iotex-core/pkg/log"
 )
@@ -72,6 +72,10 @@ func (p *Protocol) Validate(_ context.Context, act action.Action) error {
 	// Reject execution of negative amount
 	if exec.Amount().Sign() < 0 {
 		return errors.Wrap(action.ErrBalance, "negative value")
+	}
+	// Reject execution of negative gas price
+	if exec.GasPrice().Sign() < 0 {
+		return errors.Wrap(action.ErrGasPrice, "negative value")
 	}
 	// check if contract's address is valid
 	if exec.Contract() != action.EmptyAddress {

@@ -228,11 +228,12 @@ func TestExplorerApi(t *testing.T) {
 		blockchain.PrecreatedStateFactoryOption(sf),
 		blockchain.InMemDaoOption(),
 		blockchain.RegistryOption(&registry),
+		blockchain.EnableExperimentalActions(),
 	)
 	require.NotNil(bc)
 	vp := vote.NewProtocol(bc)
 	require.NoError(registry.Register(vote.ProtocolID, vp))
-	ap, err := actpool.NewActPool(bc, cfg.ActPool)
+	ap, err := actpool.NewActPool(bc, cfg.ActPool, actpool.EnableExperimentalActions())
 	require.Nil(err)
 	sf.AddActionHandlers(account.NewProtocol(), vote.NewProtocol(nil), execution.NewProtocol(bc))
 	ap.AddActionEnvelopeValidators(protocol.NewGenericValidator(bc, genesis.Default.ActionGasLimit))
@@ -284,7 +285,7 @@ func TestExplorerApi(t *testing.T) {
 	require.Equal(int64(0), stats.Transfers)
 	require.Equal(int64(0), stats.Votes)
 	require.Equal(int64(0), stats.Executions)
-	require.Equal(int64(11), stats.Aps)
+	require.Equal(int64(12), stats.Aps)
 
 	// success
 	balance, err := svc.GetAddressBalance(ta.Addrinfo["charlie"].String())
@@ -652,7 +653,7 @@ func TestServiceGetPeers(t *testing.T) {
 
 	response, err := svc.GetPeers()
 	require.Nil(err)
-	require.Equal("{<peer.ID > []}", response.Self.Address)
+	require.Equal("{: []}", response.Self.Address)
 	require.Len(response.Peers, 3)
 }
 

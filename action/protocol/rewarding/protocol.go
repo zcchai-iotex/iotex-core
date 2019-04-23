@@ -14,11 +14,11 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
-	"github.com/iotexproject/iotex-core/address"
 	"github.com/iotexproject/iotex-core/pkg/hash"
 	"github.com/iotexproject/iotex-core/pkg/log"
 )
@@ -128,6 +128,18 @@ func (p *Protocol) ReadState(
 	args ...[]byte,
 ) ([]byte, error) {
 	switch string(method) {
+	case "AvailableBalance":
+		balance, err := p.AvailableBalance(ctx, sm)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(balance.String()), nil
+	case "TotalBalance":
+		balance, err := p.TotalBalance(ctx, sm)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(balance.String()), nil
 	case "UnclaimedBalance":
 		if len(args) != 1 {
 			return nil, errors.Errorf("invalid number of arguments %d", len(args))

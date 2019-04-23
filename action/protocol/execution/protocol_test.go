@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/account"
@@ -30,7 +31,6 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
 	"github.com/iotexproject/iotex-core/action/protocol/vote"
-	"github.com/iotexproject/iotex-core/address"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/config"
@@ -299,6 +299,9 @@ func (sct *SmartContractTest) deployContracts(
 	r *require.Assertions,
 ) (contractAddresses []string) {
 	for i, contract := range sct.Deployments {
+		if contract.AppendContractAddress {
+			contract.ContractAddressToAppend = contractAddresses[contract.ContractIndexToAppend]
+		}
 		_, receipt, err := runExecution(bc, &contract, action.EmptyAddress)
 		r.NoError(err)
 		r.NotNil(receipt)
@@ -316,7 +319,12 @@ func (sct *SmartContractTest) deployContracts(
 		var evmContractAddrHash common.Address
 		addr, _ := address.FromString(receipt.ContractAddress)
 		copy(evmContractAddrHash[:], addr.Bytes())
-		r.True(bytes.Contains(sct.Deployments[i].ByteCode(), stateDB.GetCode(evmContractAddrHash)))
+		if contract.AppendContractAddress {
+			lenOfByteCode := len(contract.ByteCode())
+			r.True(bytes.Contains(contract.ByteCode()[:lenOfByteCode-32], stateDB.GetCode(evmContractAddrHash)))
+		} else {
+			r.True(bytes.Contains(sct.Deployments[i].ByteCode(), stateDB.GetCode(evmContractAddrHash)))
+		}
 		contractAddresses = append(contractAddresses, receipt.ContractAddress)
 	}
 	return
@@ -358,7 +366,6 @@ func (sct *SmartContractTest) run(r *require.Assertions) {
 			} else {
 				r.Equal(expected, retval)
 			}
-			return
 		}
 		for _, expectedBalance := range exec.ExpectedBalances {
 			account := expectedBalance.Account
@@ -367,7 +374,14 @@ func (sct *SmartContractTest) run(r *require.Assertions) {
 			}
 			balance, err := bc.Balance(account)
 			r.NoError(err)
-			r.Equal(0, balance.Cmp(expectedBalance.Balance()))
+			r.Equal(
+				0,
+				balance.Cmp(expectedBalance.Balance()),
+				"balance of account %s is different from expectation, %d vs %d",
+				account,
+				balance,
+				expectedBalance.Balance(),
+			)
 		}
 		r.Equal(len(exec.ExpectedLogs), len(receipt.Logs))
 		// TODO: check value of logs
@@ -631,9 +645,41 @@ func TestProtocol_Handle(t *testing.T) {
 	t.Run("PublicMapping", func(t *testing.T) {
 		NewSmartContractTest(t, "testdata/public-mapping.json")
 	})
+	// no-variable-length-returns
+	t.Run("NoVariableLengthReturns", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/no-variable-length-returns.json")
+	})
+	// tuple
+	t.Run("Tuple", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/tuple.json")
+	})
+	// tail-recursion
+	t.Run("TailRecursion", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/tail-recursion.json")
+	})
+	// sha3
+	t.Run("Sha3", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/sha3.json")
+	})
+	// remove-from-array
+	t.Run("RemoveFromArray", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/remove-from-array.json")
+	})
+	// send-eth
+	t.Run("SendEth", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/send-eth.json")
+	})
 	// multisend
 	t.Run("Multisend", func(t *testing.T) {
 		NewSmartContractTest(t, "testdata/multisend.json")
+	})
+	// reentry
+	t.Run("reentry-attack", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/reentry-attack.json")
+	})
+	// cashier
+	t.Run("cashier", func(t *testing.T) {
+		NewSmartContractTest(t, "testdata/cashier.json")
 	})
 }
 
@@ -670,6 +716,11 @@ func TestProtocol_Validate(t *testing.T) {
 	err = protocol.Validate(context.Background(), ex)
 	require.Error(err)
 	require.True(strings.Contains(err.Error(), "error when validating contract's address"))
+	// Case V: Negative gas price
+	ex, err = action.NewExecution("2", uint64(1), big.NewInt(100), uint64(0), big.NewInt(-1), []byte{})
+	require.NoError(err)
+	err = protocol.Validate(context.Background(), ex)
+	require.Equal(action.ErrGasPrice, errors.Cause(err))
 }
 
 /*

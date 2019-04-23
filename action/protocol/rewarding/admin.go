@@ -13,9 +13,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/rewarding/rewardingpb"
-	"github.com/iotexproject/iotex-core/address"
 )
 
 // admin stores the admin data of the rewarding protocol
@@ -236,7 +236,7 @@ func (p *Protocol) assertAmount(amount *big.Int) error {
 	if amount.Cmp(big.NewInt(0)) >= 0 {
 		return nil
 	}
-	return errors.Errorf("reward amount %s shouldn't be negative", amount.String())
+	return errors.Errorf("amount %s shouldn't be negative", amount.String())
 }
 
 func (p *Protocol) assertZeroBlockHeight(height uint64) error {
